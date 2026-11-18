@@ -1,4 +1,20 @@
 <!doctype html>
+
+<!--
+  +----------------------------------------------------+
+  |                                                    |
+  |   You went looking in the source. Good instinct:   |
+  |   that is roughly how all of this got built.       |
+  |                                                    |
+  |   Type   M A G I C   anywhere on the page.         |
+  |   Type it again to put everything back.            |
+  |                                                    |
+  |   What you get depends on the day.                 |
+  |                                                    |
+  |                               Dye Yellow Studios   |
+  +----------------------------------------------------+
+-->
+
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -251,6 +267,41 @@
   :root[data-theme="light"] .icon-sun { display: none; }
   :root[data-theme="light"] .icon-moon { display: block; }
 
+
+  /* ---- The ambient layer (off until someone types the word) ---- */
+
+  #sky {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    image-rendering: pixelated;
+    opacity: 0;
+    transition: opacity 700ms ease;
+  }
+
+  :root.magic #sky { opacity: 1; }
+
+  /* Everything on the page sits above the framebuffer. The toggle is
+     already fixed with its own z-index, so it is left alone here. */
+  main, footer, .ground { position: relative; z-index: 1; }
+
+  /* The ground rises rather than appearing, so the word feels like a cause. */
+  .ground {
+    flex: none;
+    height: 0;
+    background-repeat: repeat-x;
+    background-position: left bottom;
+    image-rendering: pixelated;
+    transition: height 460ms cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #sky, .ground { transition: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .cta { transition: none; }
     .cta:hover, .cta:focus-visible { transform: none; }
@@ -259,6 +310,8 @@
 </style>
 </head>
 <body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
   <button class="theme-toggle" id="themeToggle" type="button" hidden
           aria-label="Switch theme" title="Switch theme">
     <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -304,6 +357,8 @@
       <a class="cta" href="mailto:hello@dyeyellowstudios.com">Get in touch</a>
     </div>
   </main>
+
+  <div class="ground" id="ground"></div>
 
   <footer>
     <p class="made">
@@ -371,6 +426,952 @@
       syncLabel();
       if (root.hasAttribute('data-theme')) syncChrome(current());
     })();
+  </script>
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ---------- settled values ---------- */
+    var CFG = { px: 3, fps: 12, count: 1.1, speed: 1, alpha: 0.35, sway: 0.75, blink: 0.3, ground: 1, season: 'auto' };
+
+    /* The whole seasonal layer is off until someone types this. */
+    var MAGIC_WORD = 'magic';
+    var MAGIC_KEY = 'dys-magic';
+    var FORCED = false;
+
+    /* ?season=halloween shows a scene out of season, already switched on.
+       There is no control for it on the page: it is for looking at the
+       thing in July. */
+    try {
+      var q = (window.location.search.match(/[?&]season=([a-z0-9]+)/i) || [])[1];
+      if (q) { CFG.season = q.toLowerCase(); FORCED = true; }
+    } catch (e) { /* no query string is fine */ }
+
+    /* ---------- palettes, one full set per theme ----------
+       Pixel art cannot share a palette across a cream and a near-black page:
+       measured at 35% fade, every pale sprite sits at 1.02-1.24 contrast on
+       cream (invisible) and every dark one at 1.02-1.16 on black. So each
+       theme gets its own values, the way the page's own CSS gives --logo a
+       value per theme. Sprites are re-baked when the theme changes. */
+    var PALETTE = {
+      light: {
+        leaf: [
+          { O: '#7A3310', Y: '#C9801F' },
+          { O: '#8A5A16', Y: '#C59A2E' },
+          { O: '#6E2A12', Y: '#A8521A' }
+        ],
+        petal: [
+          { P: '#D23479', p: '#F0A6C4' },
+          { P: '#DC5A8E', p: '#F6C8DC' },
+          { P: '#8A72BE', p: '#C9BCE0' },
+          { P: '#8A7A52', p: '#A89770' }
+        ],
+        heart: [
+          { R: '#D8325C', H: '#F799B4' },
+          { R: '#C42A50', H: '#EE6C8E' },
+          { R: '#B82A4E', H: '#E07B96' }
+        ],
+        bee: { K: '#2B2416', Y: '#E0B41A', W: '#9FB8C4' },
+        bat: { K: '#1A1620', D: '#3A3048', E: '#C2423A' },
+        hog: { K: '#2A1C10', B: '#8A5F33', T: '#C9A273', E: '#17110A', N: '#4A3020' },
+        pumpkin: { K: '#2A1206', O: '#D96A14', D: '#B04E0C', S: '#4A6B2A' },
+        pumpkinGlow: ['#BFAE0C', '#B07E12', '#C9BA3A'],
+        snow: '#6E96AD',
+        snowDim: '#4A7B96',
+        web: '#8F897B',
+        spider: { K: '#231F1A', E: '#B9A92E' },
+        ghost: { G: '#8798A4', E: '#39424A' },
+        flyGlow: '#5A681F',
+        flyCore: '#8A8420',
+        wire: '#3B2F1F',
+        socket: '#8A8475',
+        bulbs: [
+          { on: '#D03A2C', off: '#C9A8A2' },
+          { on: '#2A8A4C', off: '#A8C2B0' },
+          { on: '#8E8208', off: '#C4C0A8' },
+          { on: '#2A86BC', off: '#A8BECC' }
+        ],
+        shells: [
+          ['#D03A2C', '#E89A90'], ['#6E8A9A', '#A8BEC8'], ['#1F7FB8', '#7FAFCE'],
+          ['#8E8208', '#BFB44A'], ['#2A8A4C', '#7FBF96']
+        ],
+        tile: {
+          tileWinter: { W: '#C2D6E2', w: '#A8C4D6', B: '#5B93AE', b: '#74A8C2' },
+          tileChristmas: { W: '#C2D6E2', w: '#A8C4D6', R: '#D8352A' }
+        }
+      },
+      dark: {
+        leaf: [
+          { O: '#7A3310', Y: '#E89A2B' },
+          { O: '#8A5A16', Y: '#F0C14A' },
+          { O: '#6E2A12', Y: '#C76A22' }
+        ],
+        petal: [
+          { P: '#E27BA8', p: '#F6C8DC' },
+          { P: '#F0A6C4', p: '#FCE3EE' },
+          { P: '#D9D2E8', p: '#F6F2FA' },
+          { P: '#E8E0C8', p: '#FFFFFF' }
+        ],
+        heart: [
+          { R: '#D8325C', H: '#F799B4' },
+          { R: '#E85A7E', H: '#FBC2D2' },
+          { R: '#B82A4E', H: '#E07B96' }
+        ],
+        bee: { K: '#2B2416', Y: '#F2C21E', W: '#E8F0F4' },
+        /* A black bat on a black page is 1.02 contrast, so it comes up to slate. */
+        bat: { K: '#8A7CA2', D: '#6A5C82', E: '#E0564A' },
+        hog: { K: '#6A472A', B: '#8A5F33', T: '#C9A273', E: '#17110A', N: '#4A3020' },
+        pumpkin: { K: '#7A3410', O: '#D96A14', D: '#B04E0C', S: '#4A6B2A' },
+        pumpkinGlow: ['#F7E733', '#F2B33A', '#FFF4A8'],
+        snow: '#FFFFFF',
+        snowDim: '#CFE2EC',
+        /* A black spider on a black page is invisible, so it comes up to ash. */
+        web: '#7A7E72',
+        spider: { K: '#9A9D92', E: '#F7E733' },
+        ghost: { G: '#D8E4EC', E: '#14181C' },
+        flyGlow: '#A8C23A',
+        flyCore: '#F8F4B0',
+        wire: '#8A6E48',
+        socket: '#CFC8B4',
+        bulbs: [
+          { on: '#F25A4A', off: '#6E2B26' },
+          { on: '#4FD07A', off: '#24532F' },
+          { on: '#F7E733', off: '#6E6420' },
+          { on: '#58B6F0', off: '#24465E' }
+        ],
+        shells: [
+          ['#F25A4A', '#FFD9D4'], ['#FFFFFF', '#CFE2EC'], ['#58B6F0', '#D4EEFF'],
+          ['#F7E733', '#FFFBD0'], ['#4FD07A', '#D6F7E2']
+        ],
+        tile: {
+          tileWinter: { W: '#FFFFFF', w: '#D6E6EE', B: '#5B93AE', b: '#74A8C2' },
+          tileChristmas: { W: '#FFFFFF', w: '#D6E6EE', R: '#D8352A' }
+        }
+      }
+    };
+
+    var mql = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function currentTheme() {
+      var a = document.documentElement.getAttribute('data-theme');
+      if (a === 'light' || a === 'dark') return a;
+      return mql.matches ? 'dark' : 'light';
+    }
+
+    var THEME = currentTheme();
+    function P(k) { return PALETTE[THEME][k]; }
+
+    /* Tiles that read the same on either ground stay in one table. */
+    var TILE_BASE = {
+      tileSpring: { G: '#2F7D3A', L: '#6FBF4A', P: '#E27BA8', Y: '#F7E733', D: '#4A3728', d: '#5E4836' },
+      tileSummer: { G: '#2A6B33', L: '#4E9E3C', D: '#5A4328', d: '#6E543A' },
+      tileFall: { O: '#7A3310', R: '#C2521A', Y: '#E89A2B', D: '#4A3728', d: '#5E4836' }
+    };
+
+    function tileKey(name) {
+      return P('tile')[name] || TILE_BASE[name];
+    }
+
+    /* ---------- sprites: '.' is transparent ----------
+       Maple: a centre point, two upper lobes split by notches, side lobes at
+       the waist, and a midrib down the middle. Oak: alternating round lobes
+       on a long axis. Frame 1 is the three-quarter view, frame 2 edge-on;
+       played 0-1-2-1 they read as a tumble without any real rotation. */
+    var ART = {
+      maple0: [
+        '.....O.....', '....OYO....', '.O..OYO..O.', 'OYO.OYO.OYO',
+        'OYYOOYOOYYO', '.OYYYOYYYO.', 'OOYYYOYYYOO', '.OYYYOYYYO.',
+        '..OYYOYYO..', '...OOYOO...', '.....O.....', '.....O.....'
+      ],
+      maple1: [
+        '.....O.....', '....OYO....', '..O.OYO.O..', '..OYOYOYO..',
+        '...OYOYO...', '...OYOYO...', '..OYYOYYO..', '...OYOYO...',
+        '....OYO....', '....OOO....', '.....O.....', '.....O.....'
+      ],
+      maple2: [
+        '.....O.....', '.....O.....', '....OYO....', '....OYO....',
+        '....OYO....', '....OYO....', '....OYO....', '....OYO....',
+        '.....O.....', '.....O.....', '.....O.....', '.....O.....'
+      ],
+      oak0: [
+        '....O....', '...OYO...', '..OYYYO..', '.OYYYYYO.', '..OYOYO..',
+        '.OYYOYYO.', 'OYYYOYYYO', '.OYYOYYO.', '..OYOYO..', '.OYYOYYO.',
+        '..OYOYO..', '...OOO...', '....O....'
+      ],
+      oak1: [
+        '....O....', '...OYO...', '...OYO...', '..OYYYO..', '...OYO...',
+        '..OYOYO..', '..OYOYO..', '...OYO...', '..OYOYO..', '...OYO...',
+        '...OYO...', '...OOO...', '....O....'
+      ],
+      oak2: [
+        '....O....', '....O....', '...OYO...', '...OYO...', '...OYO...',
+        '...OYO...', '...OYO...', '...OYO...', '...OYO...', '...OYO...',
+        '....O....', '....O....', '....O....'
+      ],
+      petal0: ['.PPP.', 'PpppP', '.PPP.'],
+      petal1: ['..P..', '.PpP.', '..P..'],
+      heart0: ['.RR.RR.', 'RHRRRHR', 'RRRRRRR', '.RRRRR.', '..RRR..', '...R...'],
+      heart1: ['...R...', '..RHR..', '..RRR..', '..RRR..', '...R...', '...R...'],
+      bee0: ['..WWW...', '..WWW...', '.YKYKYKK', 'KYKYKYKK', '.YKYKYK.', '..K.K...'],
+      bee1: ['........', '...WW...', '.YKYKYKK', 'KYKYKYKK', '.YKYKYK.', '..K.K...'],
+      bat0: [
+        '...........', '.K.......K.', 'KDK.KKK.KDK', 'KDDKKEKKDDK',
+        '.KDKKKKKDK.', '...KKKKK...', '....K.K....'
+      ],
+      bat1: [
+        'KK.......KK', 'KDK.....KDK', '.KDK.K.KDK.', '..KKKEKKK..',
+        '...KKKKK...', '....K.K....', '...........'
+      ],
+      fly: ['.G.', 'GCG', '.G.'],
+      star: ['..X..', 'X.X.X', '.XXX.', 'X.X.X', '..X..'],
+      bulb: ['SSS', 'BBB', 'BBB', '.B.'],
+      /* Fixtures that sit on the ground line. */
+      ghost0: [
+        '...GGGG...',
+        '..GGGGGG..',
+        '.GGGGGGGG.',
+        '.GGGGGGGG.',
+        'GGEGGGGEGG',
+        'GGEGGGGEGG',
+        'GGGGGGGGGG',
+        'GGGGMMGGGG',
+        'GGGGGGGGGG',
+        'GGGGGGGGGG',
+        'GG.GG.GG.G',
+        'G...G...G.'
+      ],
+      ghost1: [
+        '...GGGG...',
+        '..GGGGGG..',
+        '.GGGGGGGG.',
+        '.GGGGGGGG.',
+        'GGEGGGGEGG',
+        'GGEGGGGEGG',
+        'GGGGGGGGGG',
+        'GGGGMMGGGG',
+        'GGGGGGGGGG',
+        'GGGGGGGGGG',
+        '.GG.GG.GG.',
+        '.G...G...G'
+      ],
+      spider0: [
+        '.K.....K.',
+        '..K...K..',
+        'K..KKK..K',
+        '.KKKKKKK.',
+        '.KEKKKEK.',
+        '.KKKKKKK.',
+        'K..KKK..K',
+        '..K...K..',
+        '.K.....K.'
+      ],
+      spider1: [
+        '..K...K..',
+        '.K.K.K.K.',
+        '...KKK...',
+        '.KKKKKKK.',
+        '.KEKKKEK.',
+        '.KKKKKKK.',
+        '...KKK...',
+        '.K.K.K.K.',
+        '..K...K..'
+      ],
+      pumpkin: [
+        '.....SS......',
+        '....KSSK.....',
+        '..KKKKKKKKK..',
+        '.KOODOOODOOK.',
+        'KOODOOODOOOOK',
+        'KOGGOOOOOGGOK',
+        'KOOGOOOOOGOOK',
+        'KOOOOGGGOOOOK',
+        'KOGGGGOGGGGOK',
+        '.KOGOGGGOGOK.',
+        '..KKKKKKKKK..'
+      ],
+      hog: [
+        '..K.....K..', '.KBK...KBK.', '.KBBKKKBBK.', '..KBBBBBK..',
+        '.KBBBBBBBK.', '.KBEBBBEBK.', '.KBBBTBBBK.', '..KBTNTBK..',
+        '...KBTBK...', '..KBBBBBK..', '.KBBTTTBBK.', '.KBBTTTBBK.',
+        '.KBBBBBBBK.', '..KKKKKKK..'
+      ],
+      tileSpring: [
+        '...P.......Y....', '..LGL.L...LGL..L', 'LGGGLLGL.LGGGLLG',
+        'GGGGGGGGGGGGGGGG', 'LGLGGLGLGGLGLGGL', 'DDDDDDDDDDDDDDDD',
+        'dDdDDdDdDDdDdDDd', 'DDDdDDDDdDDDdDDD'
+      ],
+      tileSummer: [
+        '..L...L....L....', '.LGL.LGL..LGL.L.', 'LGGGLGGGL.GGGLGL',
+        'GGGGGGGGGGGGGGGG', 'GGGGGGGGGGGGGGGG', 'LGLGGLGLGGLGLGGL',
+        'DDDDDDDDDDDDDDDD', 'dDdDDdDdDDdDdDDd'
+      ],
+      tileFall: [
+        '...R.......Y....', '..ORO..Y..OYO...', '.OYRO.OYO.ORYO..',
+        'DDDDDDDDDDDDDDDD', 'dDdDDdDdDDdDdDDd', 'DDdDDDdDDDdDDDdD',
+        'DdDDdDdDDdDdDDdD', 'DDDdDDDDdDDDdDDD'
+      ],
+      tileWinter: [
+        '.....WWW........', '..WWWWWWWW..WWW.', 'WWWWWWWWWWWWWWWW',
+        'wWwWWwWwWWwWwWWw', 'BBBBBBBBBBBBBBBB', 'BbBBBbBBBbBBBbBB',
+        'bBBBbBBBbBBBbBBB', 'BBBBBBBBBBBBBBBB'
+      ],
+      tileChristmas: [
+        '.....WWW........', '..WWWWWWWW..WWW.', 'WWWWWWWWWWWWWWWW',
+        'wWwWWwWwWWwWwWWw', 'RRWWRRWWRRWWRRWW', 'RRWWRRWWRRWWRRWW',
+        'WWRRWWRRWWRRWWRR', 'WWRRWWRRWWRRWWRR'
+      ]
+    };
+
+    function bake(rows, key) {
+      var c = document.createElement('canvas');
+      c.width = rows[0].length;
+      c.height = rows.length;
+      var g = c.getContext('2d');
+      for (var y = 0; y < rows.length; y++) {
+        for (var x = 0; x < rows[y].length; x++) {
+          var col = key[rows[y][x]];
+          if (!col) continue;
+          g.fillStyle = col;
+          g.fillRect(x, y, 1, 1);
+        }
+      }
+      return c;
+    }
+
+    var LEAF, PETAL, HEART, BEE, BAT, FLY, STAR, HOG, PUMPKIN, BULBS, SHELL;
+    var SPIDER, WEB, GHOST;
+
+    /* The corner web is drawn rather than authored: five radials out of the
+       corner, four sagging rings across them, one pixel at a time so it stays
+       on the same grid as every sprite. */
+    var WEB_R = 34;
+    function buildWeb() {
+      var c = document.createElement('canvas');
+      c.width = WEB_R + 1;
+      c.height = WEB_R + 1;
+      var g = c.getContext('2d');
+      var spokes = 5, rings = 4, i, k, t, a;
+      g.fillStyle = P('web');
+
+      for (i = 0; i < spokes; i++) {
+        a = (i / (spokes - 1)) * (Math.PI / 2);
+        for (var r = 3; r <= WEB_R; r++) {
+          if (r % 7 === 6) continue; /* a couple of gaps: a perfect web looks printed */
+          g.fillRect(Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r), 1, 1);
+        }
+      }
+
+      for (k = 1; k <= rings; k++) {
+        var rr = 6 + (WEB_R - 6) * (k / rings);
+        for (i = 0; i < spokes - 1; i++) {
+          var a0 = (i / (spokes - 1)) * (Math.PI / 2);
+          var a1 = ((i + 1) / (spokes - 1)) * (Math.PI / 2);
+          for (t = 0; t <= 1.0001; t += 0.05) {
+            a = a0 + (a1 - a0) * t;
+            var sag = rr * (1 - 0.1 * Math.sin(t * Math.PI));
+            g.fillRect(Math.round(Math.cos(a) * sag), Math.round(Math.sin(a) * sag), 1, 1);
+          }
+        }
+      }
+      return c;
+    }
+
+    /* Every sprite canvas is rebuilt from the active theme's palette. */
+    function rebake() {
+      LEAF = [];
+      [['maple0', 'maple1', 'maple2'], ['oak0', 'oak1', 'oak2']].forEach(function (shape) {
+        P('leaf').forEach(function (pal) {
+          LEAF.push(shape.map(function (n) { return bake(ART[n], pal); }));
+        });
+      });
+      PETAL = P('petal').map(function (pal) {
+        return [bake(ART.petal0, pal), bake(ART.petal1, pal)];
+      });
+      HEART = P('heart').map(function (pal) {
+        return [bake(ART.heart0, pal), bake(ART.heart1, pal)];
+      });
+      BEE = [bake(ART.bee0, P('bee')), bake(ART.bee1, P('bee'))];
+      BAT = [bake(ART.bat0, P('bat')), bake(ART.bat1, P('bat'))];
+      FLY = bake(ART.fly, { G: P('flyGlow'), C: P('flyCore') });
+      STAR = bake(ART.star, { X: P('snow') });
+      HOG = bake(ART.hog, P('hog'));
+      PUMPKIN = P('pumpkinGlow').map(function (g) {
+        var k = P('pumpkin');
+        return bake(ART.pumpkin, { K: k.K, O: k.O, D: k.D, S: k.S, G: g });
+      });
+      BULBS = P('bulbs').map(function (b) {
+        return {
+          on: bake(ART.bulb, { S: P('socket'), B: b.on }),
+          off: bake(ART.bulb, { S: P('socket'), B: b.off })
+        };
+      });
+      SHELL = P('shells');
+      SPIDER = [bake(ART.spider0, P('spider')), bake(ART.spider1, P('spider'))];
+      GHOST = [
+        bake(ART.ghost0, { G: P('ghost').G, E: P('ghost').E, M: P('ghost').E }),
+        bake(ART.ghost1, { G: P('ghost').G, E: P('ghost').E, M: P('ghost').E })
+      ];
+      WEB = buildWeb();
+    }
+
+    var TUMBLE = [0, 1, 2, 1];
+
+    /* ---------- scenes ----------
+       A holiday is an override, not a sixth season: it swaps what is in the
+       air, may add a fixture on the ground, and borrows a season's tileset. */
+    var SCENES = {
+      spring:     { ground: 'Spring',    air: { petal: 8, bee: 3 } },
+      summer:     { ground: 'Summer',    air: { fly: 10, fluff: 4 } },
+      fall:       { ground: 'Fall',      air: { leaf: 11 } },
+      winter:     { ground: 'Winter',    air: { snow: 34 } },
+
+      /* Holidays. Christmas is one of these, not a fifth season: winter runs
+         the whole of December underneath it. */
+      christmas:  { ground: 'Christmas', air: { snow: 22 }, lights: true },
+      groundhog:  { ground: 'Winter',    air: { snow: 14 }, fixture: 'hog' },
+      valentines: { ground: 'Winter',    air: { heart: 10 } },
+      july4:      { ground: 'Summer',    air: { fly: 4 }, fireworks: true },
+      halloween:  { ground: 'Fall',      air: { bat: 6, ghost: 2 }, fixture: 'pumpkin', web: true }
+    };
+
+    /* ---------- state ---------- */
+    var canvas = document.getElementById('sky');
+    var ctx = canvas.getContext('2d');
+    var ground = document.getElementById('ground');
+
+    var W = 0, H = 0, floorY = 0, tick = 0, last = 0, raf = 0;
+    var ON = false;
+    var scene = 'fall';
+    var parts = [];
+    var lights = [];
+    var nextRocket = 40;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function rand(a, b) { return a + Math.random() * (b - a); }
+    function conf() { return SCENES[scene] || SCENES.fall; }
+
+    /* Holidays win over seasons. Spring Mar-May, summer Jun-Aug,
+       fall Sep-Nov, Christmas Dec 1-26, winter Dec 27-Feb. */
+    function holidayFor(d) {
+      var m = d.getMonth(), day = d.getDate();
+      if (m === 11 && day <= 26) return 'christmas';
+      if (m === 9 && day >= 24) return 'halloween';
+      if (m === 6 && day >= 3 && day <= 5) return 'july4';
+      if (m === 1 && day === 2) return 'groundhog';
+      if (m === 1 && day >= 10 && day <= 14) return 'valentines';
+      return null;
+    }
+
+    function seasonFor(d) {
+      var m = d.getMonth(), day = d.getDate();
+      if (m === 11 || m === 0 || m === 1) return 'winter';
+      if (m <= 4) return 'spring';
+      if (m <= 7) return 'summer';
+      return 'fall';
+    }
+
+    function resolve(d) { return holidayFor(d) || seasonFor(d); }
+
+    /* ---------- spawners ---------- */
+    function faller(kind, above, extra) {
+      var p = {
+        kind: kind, re: kind,
+        x: rand(0, W), y: above ? rand(-46, -8) : rand(0, Math.max(1, floorY)),
+        vy: rand(0.16, 0.42),
+        amp: rand(3, 11), phase: rand(0, 6.28), ps: rand(0.04, 0.1),
+        f: (Math.random() * 4) | 0, ft: 0, every: 2 + ((Math.random() * 3) | 0),
+        set: 0
+      };
+      if (extra) Object.keys(extra).forEach(function (k) { p[k] = extra[k]; });
+      return p;
+    }
+
+    var SPAWN = {
+      leaf: function (a) { return faller('leaf', a, { set: (Math.random() * LEAF.length) | 0 }); },
+      heart: function (a) {
+        return faller('heart', a, {
+          set: (Math.random() * HEART.length) | 0,
+          vy: rand(0.12, 0.3), amp: rand(5, 14), every: 3 + ((Math.random() * 3) | 0)
+        });
+      },
+      petal: function (a) { return faller('petal', a, { set: (Math.random() * 3) | 0 }); },
+      fluff: function (a) {
+        return faller('fluff', a, { set: 3, vy: rand(0.06, 0.18), amp: rand(8, 20) });
+      },
+      snow: function (a) {
+        var r = Math.random();
+        return {
+          kind: 'snow', re: 'snow',
+          size: r < 0.14 ? 3 : (r < 0.5 ? 2 : 1),
+          x: rand(0, W), y: a ? rand(-20, -2) : rand(0, Math.max(1, floorY)),
+          vy: rand(0.12, 0.5), drift: rand(-0.14, 0.14), phase: rand(0, 6.28), amp: 0
+        };
+      },
+      /* A ghost crosses the whole page once, fading in and out at the edges,
+         so it is never seen to pop in. ~40 seconds end to end. */
+      ghost: function (recycle) {
+        var dir = Math.random() < 0.5 ? 1 : -1;
+        return {
+          kind: 'ghost', dir: dir,
+          /* On first load they are already partway across: nobody should
+             have to wait 40 seconds for the page to have a ghost in it. */
+          x: recycle ? (dir > 0 ? -14 : W + 4) : rand(-10, W - 6),
+          y: rand(H * 0.12, Math.max(H * 0.24, floorY * 0.62)),
+          vx: dir * rand(0.35, 0.6),
+          phase: rand(0, 6.28), f: 0, ft: 0
+        };
+      },
+      bee: function () { return wanderer('bee'); },
+      fly: function () { return wanderer('fly'); },
+      bat: function () { return wanderer('bat'); }
+    };
+
+    function wanderer(kind) {
+      return {
+        kind: kind,
+        x: rand(0, W), y: rand(H * 0.1, Math.max(H * 0.2, floorY * 0.9)),
+        vx: rand(-0.5, 0.5), vy: rand(-0.2, 0.2),
+        tx: rand(0, W), ty: rand(H * 0.08, Math.max(H * 0.2, floorY * 0.85)),
+        hold: 0, f: 0, amp: 0,
+        phase: rand(0, 6.28),
+        period: kind === 'fly' ? rand(14, 34) : 0
+      };
+    }
+
+    function spawnRocket() {
+      return {
+        kind: 'rocket', x: rand(W * 0.08, W * 0.92), y: floorY || H,
+        vy: -rand(1.5, 2.6), peak: rand(H * 0.08, H * 0.46),
+        shell: SHELL[(Math.random() * SHELL.length) | 0]
+      };
+    }
+
+    /* Two shapes: a fast peony, and a slower willow that hangs and drips. */
+    function burst(x, y, shell) {
+      var willow = Math.random() < 0.3;
+      var n = (willow ? 22 : 26) + ((Math.random() * 10) | 0);
+      for (var i = 0; i < n; i++) {
+        var a = (i / n) * 6.283 + rand(-0.14, 0.14);
+        var sp = willow ? rand(0.3, 0.85) : rand(0.5, 1.75);
+        var life = willow ? 26 + ((Math.random() * 16) | 0) : 14 + ((Math.random() * 12) | 0);
+        parts.push({
+          kind: 'spark', x: x, y: y,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          life: life, max: life,
+          grav: willow ? 0.028 : 0.05,
+          col: Math.random() < 0.35 ? shell[1] : shell[0]
+        });
+      }
+    }
+
+    function buildLights() {
+      lights = [];
+      if (!conf().lights || CFG.count <= 0) return;
+      var swag = 62, sag = 13, top = 4;
+      var n = Math.ceil(W / swag) + 1, i = 0;
+      for (var s = 0; s < n; s++) {
+        for (var b = 1; b <= 3; b++) {
+          var t = b / 4;
+          var x = s * swag + t * swag;
+          if (x > W + 4) continue;
+          lights.push({
+            x: Math.round(x),
+            y: Math.round(top + Math.sin(t * Math.PI) * sag),
+            bulb: BULBS[i % BULBS.length],
+            period: 14 + ((Math.random() * 16) | 0),
+            offset: (Math.random() * 30) | 0
+          });
+          i++;
+        }
+      }
+      lights.sag = sag;
+      lights.swag = swag;
+      lights.top = top;
+    }
+
+    function populate() {
+      parts = [];
+      var air = conf().air || {};
+      Object.keys(air).forEach(function (kind) {
+        var fn = SPAWN[kind];
+        if (!fn) return;
+        var wandering = kind === 'bee' || kind === 'fly' || kind === 'bat';
+        var n = Math.round(air[kind] * CFG.count);
+        if (wandering && CFG.count > 0) n = Math.max(1, n);
+        for (var i = 0; i < n; i++) parts.push(fn(false));
+      });
+      buildLights();
+      nextRocket = 24;
+    }
+
+    function resize() {
+      W = Math.max(1, Math.ceil(window.innerWidth / CFG.px));
+      H = Math.max(1, Math.ceil(window.innerHeight / CFG.px));
+      canvas.width = W;
+      canvas.height = H;
+      ctx.imageSmoothingEnabled = false;
+      measureFloor();
+      populate();
+      draw();
+    }
+
+    /* The ground strip is a DOM element; read where it actually sits so
+       sprites settle onto it instead of at some guessed fraction. */
+    function measureFloor() {
+      var top = H * 0.88;
+      try {
+        var r = ground.getBoundingClientRect();
+        if (r.height > 0 || r.top > 0) top = r.top / CFG.px;
+      } catch (e) {}
+      floorY = Math.max(20, Math.min(H, Math.round(top)));
+    }
+
+    function steer(p, k, max) {
+      if (--p.hold <= 0) {
+        p.tx = rand(10, W - 10);
+        p.ty = rand(H * 0.08, Math.max(H * 0.2, floorY * 0.85));
+        p.hold = 28 + ((Math.random() * 40) | 0);
+      }
+      var dx = p.tx - p.x, dy = p.ty - p.y;
+      var d = Math.sqrt(dx * dx + dy * dy) || 1;
+      p.vx += (dx / d) * k;
+      p.vy += (dy / d) * k;
+      p.vx *= 0.9;
+      p.vy *= 0.9;
+      var sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      if (sp > max) { p.vx *= max / sp; p.vy *= max / sp; }
+      p.x += p.vx * CFG.speed;
+      p.y += p.vy * CFG.speed;
+    }
+
+    function update() {
+      tick++;
+
+      if (conf().fireworks && CFG.count > 0) {
+        nextRocket -= CFG.speed;
+        if (nextRocket <= 0) {
+          /* Mostly singles, with the odd salvo, the way a real show paces. */
+          var salvo = Math.random() < 0.3 ? 2 + ((Math.random() * 2) | 0) : 1;
+          for (var r = 0; r < salvo; r++) parts.push(spawnRocket());
+          nextRocket = (11 + Math.random() * 20) / Math.max(0.3, CFG.count);
+        }
+      }
+
+      for (var i = parts.length - 1; i >= 0; i--) {
+        var p = parts[i];
+
+        if (p.kind === 'snow') {
+          p.y += p.vy * CFG.speed;
+          p.x += (p.drift + Math.sin(p.y * 0.06 + p.phase) * 0.22) * CFG.speed;
+          if (p.x < -6) p.x = W + 4;
+          if (p.x > W + 6) p.x = -4;
+          if (p.y > floorY + 6) parts[i] = SPAWN.snow(true);
+        } else if (p.kind === 'leaf' || p.kind === 'petal' || p.kind === 'fluff' || p.kind === 'heart') {
+          p.y += p.vy * CFG.speed;
+          p.phase += p.ps * CFG.speed;
+          if (++p.ft >= p.every) { p.ft = 0; p.f = (p.f + 1) % 4; }
+          if (p.y > floorY + 10) parts[i] = SPAWN[p.re](true);
+        } else if (p.kind === 'bee') {
+          steer(p, 0.07, 0.9);
+          p.y += Math.sin(tick * 0.5 + p.phase) * 0.12;
+          p.f ^= 1;
+        } else if (p.kind === 'ghost') {
+          p.x += p.vx * CFG.speed;
+          p.phase += 0.09 * CFG.speed;
+          p.y += Math.sin(p.phase) * 0.3 * CFG.speed;
+          if (++p.ft >= 3) { p.ft = 0; p.f ^= 1; }
+          if (p.dir > 0 ? p.x > W + 8 : p.x < -18) parts[i] = SPAWN.ghost(true);
+        } else if (p.kind === 'bat') {
+          steer(p, 0.05, 0.75);
+          p.f ^= 1;
+        } else if (p.kind === 'fly') {
+          steer(p, 0.03, 0.45);
+          p.phase += (6.28 / p.period) * CFG.speed;
+        } else if (p.kind === 'rocket') {
+          p.y += p.vy * CFG.speed;
+          if (p.y <= p.peak) {
+            burst(p.x, p.y, p.shell);
+            parts.splice(i, 1);
+          }
+        } else if (p.kind === 'spark') {
+          p.vy += (p.grav || 0.05) * CFG.speed;
+          p.x += p.vx * CFG.speed;
+          p.y += p.vy * CFG.speed;
+          p.life -= CFG.speed;
+          if (p.life <= 0) parts.splice(i, 1);
+        }
+      }
+    }
+
+    /* Fade anything in the last stretch so it settles into the ground line
+       instead of being clipped by it. */
+    function alphaAt(y, base) {
+      var a = base * CFG.alpha;
+      var fade = 20;
+      if (y > floorY - fade) a *= Math.max(0, 1 - (y - (floorY - fade)) / (fade + 6));
+      return Math.max(0, Math.min(1, a));
+    }
+
+    function blit(img, x, y, flip) {
+      x = Math.round(x);
+      y = Math.round(y);
+      if (flip) {
+        ctx.save();
+        ctx.translate(x + img.width, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img, x, y);
+      }
+    }
+
+    function drawLights() {
+      if (!lights.length) return;
+      ctx.globalAlpha = CFG.alpha;
+      ctx.fillStyle = P('wire');
+      for (var x = 0; x <= W; x++) {
+        var t = (x % lights.swag) / lights.swag;
+        ctx.fillRect(x, Math.round(lights.top + Math.sin(t * Math.PI) * lights.sag), 1, 1);
+      }
+      for (var i = 0; i < lights.length; i++) {
+        var L = lights[i];
+        var per = Math.max(3, L.period / CFG.blink);
+        var on = reduce ? true : ((tick + L.offset) % per) < per * 0.68;
+        blit(on ? L.bulb.on : L.bulb.off, L.x - 1, L.y + 1, false);
+      }
+    }
+
+    /* Fixtures stand on the ground line, clipped just into the soil so the
+       groundhog can rise out of it. */
+    function drawFixture() {
+      var f = conf().fixture;
+      if (!f || CFG.count <= 0) return;
+      var baseline = floorY + 3;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, baseline);
+      ctx.clip();
+      ctx.globalAlpha = 1;
+
+      if (f === 'pumpkin') {
+        var img = PUMPKIN[reduce ? 0 : (Math.abs((Math.sin(tick * 0.7) + Math.sin(tick * 0.31)) * 1.6) | 0) % 3];
+        blit(img, Math.round(W * 0.21), baseline - img.height, false);
+      } else if (f === 'hog') {
+        /* 14s cycle: buried, rising, up, ducking. */
+        var T = reduce ? 80 : tick % 170;
+        var up = 0;
+        if (T < 48) up = 0;
+        else if (T < 60) up = (T - 48) / 12;
+        else if (T < 110) up = 1;
+        else if (T < 122) up = 1 - (T - 110) / 12;
+        if (up > 0) {
+          blit(HOG, Math.round(W * 0.7), baseline - Math.round(HOG.height * up), false);
+        }
+      }
+      ctx.restore();
+    }
+
+    /* The web hangs in the top-left corner: the only corner the page leaves
+       empty (the toggle owns top-right, the panel bottom-left). */
+    function drawWeb() {
+      if (!conf().web || CFG.count <= 0) return;
+
+      ctx.globalAlpha = Math.min(1, CFG.alpha);
+      blit(WEB, 0, 0, false);
+
+      /* 20s cycle: sat in the web, lowering, hanging, climbing back. */
+      var T = reduce ? 90 : tick % 250;
+      var drop = 0;
+      if (T < 44) drop = 0;
+      else if (T < 80) drop = (T - 44) / 36;
+      else if (T < 180) drop = 1;
+      else if (T < 216) drop = 1 - (T - 180) / 36;
+
+      var anchor = 20;
+      var base = 24;
+      var len = Math.round(drop * 30);
+      var dx = len > 0 ? Math.sin(tick * 0.11) * 2.2 * CFG.sway : 0;
+
+      ctx.fillStyle = P('web');
+      for (var i = 0; i < len; i++) {
+        ctx.fillRect(anchor + Math.round(dx * (i / len)), base + i, 1, 1);
+      }
+
+      var img = SPIDER[reduce ? 0 : (tick >> 1) & 1];
+      blit(img, anchor + Math.round(dx) - 4, base + len, false);
+      ctx.globalAlpha = 1;
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      if (!ON || CFG.count <= 0) return;
+
+      drawLights();
+      drawWeb();
+
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        var sx = p.x + Math.sin(p.phase) * (p.amp || 0) * CFG.sway;
+
+        if (p.kind === 'leaf') {
+          ctx.globalAlpha = alphaAt(p.y, 0.95);
+          blit(LEAF[p.set][TUMBLE[p.f]], sx, p.y, false);
+        } else if (p.kind === 'heart') {
+          ctx.globalAlpha = alphaAt(p.y, 0.9);
+          blit(HEART[p.set][p.f % 2], sx, p.y, false);
+        } else if (p.kind === 'petal' || p.kind === 'fluff') {
+          ctx.globalAlpha = alphaAt(p.y, p.kind === 'fluff' ? 0.8 : 0.85);
+          blit(PETAL[p.set][p.f % 2], sx, p.y, false);
+        } else if (p.kind === 'snow') {
+          ctx.globalAlpha = alphaAt(p.y, p.size === 1 ? 0.62 : 0.92);
+          if (p.size === 3) {
+            blit(STAR, p.x, p.y, false);
+          } else {
+            ctx.fillStyle = p.size === 2 ? P('snow') : P('snowDim');
+            ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+          }
+        } else if (p.kind === 'bee') {
+          ctx.globalAlpha = CFG.alpha;
+          blit(BEE[p.f], p.x, p.y, p.vx < 0);
+        } else if (p.kind === 'ghost') {
+          /* Fade across the first and last sixth of the crossing. */
+          var span = W + 22;
+          var prog = (p.dir > 0 ? p.x + 14 : W + 4 - p.x) / span;
+          var env = Math.max(0, Math.min(1, Math.min(prog, 1 - prog) / 0.16));
+          ctx.globalAlpha = env * CFG.alpha * 0.9;
+          blit(GHOST[p.f], p.x, p.y, false);
+        } else if (p.kind === 'bat') {
+          ctx.globalAlpha = CFG.alpha;
+          blit(BAT[p.f], p.x, p.y, p.vx < 0);
+        } else if (p.kind === 'fly') {
+          /* Cubed sine: mostly dark with a short bright flash. */
+          var g = Math.pow((Math.sin(p.phase) + 1) / 2, 3);
+          ctx.globalAlpha = Math.min(1, g * CFG.alpha);
+          if (g > 0.5) {
+            blit(FLY, p.x - 1, p.y - 1, false);
+          } else {
+            ctx.fillStyle = P('flyCore');
+            ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+          }
+        } else if (p.kind === 'rocket') {
+          ctx.globalAlpha = CFG.alpha;
+          ctx.fillStyle = p.shell[1];
+          ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 2);
+          ctx.globalAlpha = Math.min(1, CFG.alpha * 0.4);
+          ctx.fillRect(Math.round(p.x), Math.round(p.y) + 2, 1, 3);
+        } else if (p.kind === 'spark') {
+          ctx.globalAlpha = Math.min(1, (p.life / p.max) * CFG.alpha);
+          ctx.fillStyle = p.col;
+          ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+        }
+      }
+
+      ctx.globalAlpha = 1;
+      drawFixture();
+    }
+
+    function loop(now) {
+      raf = window.requestAnimationFrame(loop);
+      if (now - last < 1000 / CFG.fps) return;
+      last = now;
+      update();
+      draw();
+    }
+
+    function start() {
+      if (raf || reduce || !ON || CFG.count <= 0 || document.hidden) return;
+      last = 0;
+      raf = window.requestAnimationFrame(loop);
+    }
+
+    function stop() { if (raf) { window.cancelAnimationFrame(raf); raf = 0; } }
+
+    function setGround() {
+      var name = 'tile' + conf().ground;
+      var rows = ON && CFG.ground ? ART[name] : null;
+      if (!rows) {
+        ground.style.backgroundImage = 'none';
+        ground.style.height = '0px';
+        return;
+      }
+      var c = bake(rows, tileKey(name));
+      ground.style.backgroundImage = 'url(' + c.toDataURL() + ')';
+      ground.style.backgroundSize = (c.width * CFG.px) + 'px ' + (c.height * CFG.px) + 'px';
+      ground.style.height = (c.height * CFG.px) + 'px';
+    }
+
+    function applyAll() {
+      setGround();
+      resize();
+      stop();
+      start();
+      if (reduce) draw();
+    }
+
+    /* ---------- the word ---------- */
+    function setMagic(on) {
+      ON = !!on;
+      document.documentElement.classList.toggle('magic', ON);
+      applyAll();
+      try { window.localStorage.setItem(MAGIC_KEY, ON ? '1' : '0'); } catch (e) {}
+    }
+
+    var typed = '';
+    document.addEventListener('keydown', function (ev) {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      var t = ev.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      var k = (ev.key || '').toLowerCase();
+      if (k.length !== 1 || k < 'a' || k > 'z') return;
+      typed = (typed + k).slice(-MAGIC_WORD.length);
+      if (typed === MAGIC_WORD) {
+        typed = '';
+        setMagic(!ON);
+      }
+    });
+
+    function onTheme() {
+      var next = currentTheme();
+      if (next === THEME) return;
+      THEME = next;
+      rebake();
+      setGround();
+      draw();
+    }
+
+    /* index.html owns the toggle. Watch the attribute it sets, and the OS
+       setting, so the sprite palettes follow the theme either way. */
+    if (window.MutationObserver) {
+      new MutationObserver(onTheme).observe(document.documentElement, {
+        attributes: true, attributeFilter: ['data-theme']
+      });
+    }
+    if (mql.addEventListener) mql.addEventListener('change', onTheme);
+    else if (mql.addListener) mql.addListener(onTheme);
+
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stop(); else start();
+    });
+
+    var rt;
+    window.addEventListener('resize', function () {
+      window.clearTimeout(rt);
+      rt = window.setTimeout(function () { setGround(); resize(); }, 150);
+    });
+
+    rebake();
+    scene = CFG.season === 'auto' ? resolve(new Date()) : CFG.season;
+    if (!SCENES[scene]) { CFG.season = 'auto'; scene = resolve(new Date()); }
+
+    /* Once found, it stays found. */
+    var remembered = false;
+    try { remembered = window.localStorage.getItem(MAGIC_KEY) === '1'; } catch (e) {}
+    setMagic(FORCED || remembered);
+  })();
   </script>
 </body>
 </html>
