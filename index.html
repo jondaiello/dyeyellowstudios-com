@@ -50,6 +50,11 @@
 <style>
   /* ---- Light (default) ---- */
   :root {
+    /* The page's own theme, told to the browser. Without this the UA
+       follows the OS, and the strip behind Safari's bottom bar stays
+       light while an explicitly dark page sits above it. */
+    color-scheme: light;
+
     --yellow: #F7E733;        /* lemon, both themes */
     --bg: #FAF8F3;
     --fg: #111110;
@@ -66,6 +71,7 @@
   /* ---- Dark: same lemon as light mode ---- */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
+      color-scheme: dark;
       --yellow: #F7E733;
       --bg: #100F0C;
       --fg: #F2F2EC;
@@ -80,6 +86,7 @@
   }
 
   :root[data-theme="dark"] {
+    color-scheme: dark;
     --yellow: #F7E733;
     --bg: #100F0C;
     --fg: #F2F2EC;
@@ -95,6 +102,8 @@
   * { box-sizing: border-box; }
 
   html, body { margin: 0; }
+
+  html { background: var(--bg); }
 
   body {
     background: var(--bg);
