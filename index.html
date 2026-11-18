@@ -899,13 +899,29 @@
 
     /* Holidays win over seasons. Spring Mar-May, summer Jun-Aug,
        fall Sep-Nov, Christmas Dec 1-26, winter Dec 27-Feb. */
+    /* Each holiday owns a run of days ending on the day itself: ten for
+       most, and twenty-five for Christmas, which opens on December 1.
+       Listed in precedence order, though none of these overlap. */
+    var HOLIDAYS = [
+      { name: 'christmas',  month: 11, day: 25, span: 25 },
+      { name: 'halloween',  month: 9,  day: 31, span: 10 },
+      { name: 'july4',      month: 6,  day: 4,  span: 10 },
+      { name: 'valentines', month: 1,  day: 14, span: 10 },
+      { name: 'groundhog',  month: 1,  day: 2,  span: 10 }
+    ];
+
     function holidayFor(d) {
-      var m = d.getMonth(), day = d.getDate();
-      if (m === 11 && day <= 26) return 'christmas';
-      if (m === 9 && day >= 24) return 'halloween';
-      if (m === 6 && day >= 3 && day <= 5) return 'july4';
-      if (m === 1 && day === 2) return 'groundhog';
-      if (m === 1 && day >= 10 && day <= 14) return 'valentines';
+      var y = d.getFullYear();
+      var today = new Date(y, d.getMonth(), d.getDate()).getTime();
+
+      for (var i = 0; i < HOLIDAYS.length; i++) {
+        var h = HOLIDAYS[i];
+        /* Date() rolls a negative day back into the previous month, so a
+           window may start before the holiday's own month. */
+        var start = new Date(y, h.month, h.day - (h.span - 1)).getTime();
+        var end = new Date(y, h.month, h.day).getTime();
+        if (today >= start && today <= end) return h.name;
+      }
       return null;
     }
 
