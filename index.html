@@ -527,6 +527,7 @@
         snowDim: '#4A7B96',
         web: '#8F897B',
         spider: { K: '#231F1A', E: '#B9A92E' },
+        banner: '#111110',
         ghost: { G: '#8798A4', E: '#39424A' },
         flyGlow: '#5A681F',
         flyCore: '#8A8420',
@@ -575,6 +576,7 @@
         /* A black spider on a black page is invisible, so it comes up to ash. */
         web: '#7A7E72',
         spider: { K: '#9A9D92', E: '#F7E733' },
+        banner: '#F7E733',
         ghost: { G: '#D8E4EC', E: '#14181C' },
         flyGlow: '#A8C23A',
         flyCore: '#F8F4B0',
@@ -785,8 +787,45 @@
       return c;
     }
 
+    /* Enough of an alphabet for one sentence. 5x7, the size arcade
+       machines used, which at PX = 3 is 15 by 21 real pixels. */
+    var FONT = {
+      ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
+      A: ['.XXX.', 'X...X', 'X...X', 'XXXXX', 'X...X', 'X...X', 'X...X'],
+      E: ['XXXXX', 'X....', 'X....', 'XXXX.', 'X....', 'X....', 'XXXXX'],
+      H: ['X...X', 'X...X', 'X...X', 'XXXXX', 'X...X', 'X...X', 'X...X'],
+      N: ['X...X', 'XX..X', 'X.X.X', 'X.X.X', 'X..XX', 'X...X', 'X...X'],
+      P: ['XXXX.', 'X...X', 'X...X', 'XXXX.', 'X....', 'X....', 'X....'],
+      R: ['XXXX.', 'X...X', 'X...X', 'XXXX.', 'X.X..', 'X..X.', 'X...X'],
+      W: ['X...X', 'X...X', 'X...X', 'X.X.X', 'X.X.X', 'XX.XX', 'X...X'],
+      Y: ['X...X', 'X...X', '.X.X.', '..X..', '..X..', '..X..', '..X..']
+    };
+
+    var BANNER_TEXT = 'HAPPY NEW YEAR';
+
+    function buildBanner() {
+      var gw = 5, gh = 7, gap = 1;
+      var n = BANNER_TEXT.length;
+      var c = document.createElement('canvas');
+      c.width = n * (gw + gap) - gap;
+      c.height = gh;
+      var g = c.getContext('2d');
+      g.fillStyle = P('banner');
+
+      for (var i = 0; i < n; i++) {
+        var rows = FONT[BANNER_TEXT.charAt(i)];
+        if (!rows) continue;
+        for (var y = 0; y < gh; y++) {
+          for (var x = 0; x < gw; x++) {
+            if (rows[y].charAt(x) === 'X') g.fillRect(i * (gw + gap) + x, y, 1, 1);
+          }
+        }
+      }
+      return c;
+    }
+
     var LEAF, PETAL, HEART, BEE, BAT, FLY, STAR, HOG, PUMPKIN, BULBS, SHELL;
-    var SPIDER, WEB, GHOST;
+    var SPIDER, WEB, GHOST, BANNER;
 
     /* The corner web is drawn rather than authored: five radials out of the
        corner, four sagging rings across them, one pixel at a time so it stays
@@ -859,6 +898,7 @@
         bake(ART.ghost1, { G: P('ghost').G, E: P('ghost').E, M: P('ghost').E })
       ];
       WEB = buildWeb();
+      BANNER = buildBanner();
     }
 
     var TUMBLE = [0, 1, 2, 1];
@@ -875,6 +915,7 @@
       /* Holidays. Christmas is one of these, not a fifth season: winter runs
          the whole of December underneath it. */
       christmas:  { ground: 'Christmas', air: { snow: 22 }, lights: true },
+      newyears:   { ground: 'Winter',    air: { snow: 16 }, fireworks: true, banner: true },
       groundhog:  { ground: 'Winter',    air: { snow: 14 }, fixture: 'hog' },
       valentines: { ground: 'Winter',    air: { heart: 10 } },
       july4:      { ground: 'Summer',    air: { fly: 4 }, fireworks: true },
@@ -888,6 +929,7 @@
 
     var W = 0, H = 0, floorY = 0, tick = 0, last = 0, raf = 0;
     var ON = false;
+    var headroom = 0;
     var scene = 'fall';
     var parts = [];
     var lights = [];
@@ -904,10 +946,11 @@
        Listed in precedence order, though none of these overlap. */
     var HOLIDAYS = [
       { name: 'christmas',  month: 11, day: 25, span: 25 },
+      { name: 'newyears',   month: 11, day: 31, span: 10 },
       { name: 'halloween',  month: 9,  day: 31, span: 10 },
       { name: 'july4',      month: 6,  day: 4,  span: 10 },
       { name: 'valentines', month: 1,  day: 14, span: 10 },
-      { name: 'groundhog',  month: 1,  day: 2,  span: 10 }
+      { name: 'groundhog',  month: 1,  day: 2,  span: 1 }
     ];
 
     function holidayFor(d) {
@@ -1074,12 +1117,22 @@
       canvas.height = H;
       ctx.imageSmoothingEnabled = false;
       measureFloor();
+      measureHead();
       populate();
       draw();
     }
 
     /* The ground strip is a DOM element; read where it actually sits so
        sprites settle onto it instead of at some guessed fraction. */
+    /* How much empty sky sits above the wordmark right now. */
+    function measureHead() {
+      headroom = 0;
+      try {
+        var logo = document.querySelector('.logo');
+        if (logo) headroom = logo.getBoundingClientRect().top / CFG.px;
+      } catch (e) {}
+    }
+
     function measureFloor() {
       var top = H * 0.88;
       try {
@@ -1267,12 +1320,43 @@
       ctx.globalAlpha = 1;
     }
 
+    /* The line reads out near the top of the sky, well clear of the
+       wordmark, and only now and then: a thing that happens, not a
+       heading the page has grown. */
+    function drawBanner() {
+      if (!conf().banner || !BANNER || CFG.count <= 0) return;
+
+      var env = 1;
+      if (!reduce) {
+        var T = tick % 230;
+        if (T < 26) env = T / 26;
+        else if (T < 130) env = 1;
+        else if (T < 160) env = 1 - (T - 130) / 30;
+        else env = 0;
+      }
+      if (env <= 0) return;
+
+      /* It lives in the gap above the wordmark, and only if the gap is
+         really there: scrolled down, or on a screen too short to hold it,
+         the line simply does not run and the fireworks carry the night. */
+      if (headroom < BANNER.height + 4) return;
+      /* And only if it clears the toggle in the corner. On a narrow phone
+         it does not, and the night is fireworks alone. */
+      if (BANNER.width > W - 40) return;
+
+      ctx.globalAlpha = Math.min(1, env * CFG.alpha);
+      var y = Math.max(3, Math.round((headroom - BANNER.height) / 2));
+      blit(BANNER, Math.round((W - BANNER.width) / 2), y, false);
+      ctx.globalAlpha = 1;
+    }
+
     function draw() {
       ctx.clearRect(0, 0, W, H);
       if (!ON || CFG.count <= 0) return;
 
       drawLights();
       drawWeb();
+      drawBanner();
 
       for (var i = 0; i < parts.length; i++) {
         var p = parts[i];
@@ -1461,6 +1545,7 @@
       sTick = window.requestAnimationFrame(function () {
         sTick = 0;
         measureFloor();
+        measureHead();
       });
     }, false);
 
