@@ -529,6 +529,13 @@
         spider: { K: '#231F1A', E: '#B9A92E' },
         banner: '#111110',
         burrow: { D: '#2B1B0E', E: '#6B4A2A', K: '#4A3A2C' },
+        flower: [
+          { T: '#C83F5E', P: '#D9637E', C: '#C9A014', S: '#3F7A3A', L: '#4E8F45' },
+          { T: '#C98A14', P: '#D9A72E', C: '#9A6A0E', S: '#3F7A3A', L: '#4E8F45' },
+          { T: '#9A5AAE', P: '#B37EC2', C: '#C9A014', S: '#3F7A3A', L: '#4E8F45' }
+        ],
+        dragon: { K: '#24353D', B: '#2E6E7A', W: '#7E97A0' },
+        shimmer: '#B8905A',
         santa: { K: '#2A2622', R: '#C0392B' },
         ghost: { G: '#8798A4', E: '#39424A' },
         flyGlow: '#5A681F',
@@ -580,6 +587,13 @@
         spider: { K: '#9A9D92', E: '#F7E733' },
         banner: '#F7E733',
         burrow: { D: '#0A0806', E: '#6B4A2A', K: '#2A241C' },
+        flower: [
+          { T: '#E8536F', P: '#F0859A', C: '#F2C21E', S: '#5FA855', L: '#72BF66' },
+          { T: '#E8A62E', P: '#F2C24A', C: '#C98A14', S: '#5FA855', L: '#72BF66' },
+          { T: '#BE7AD2', P: '#D2A0E0', C: '#F2C21E', S: '#5FA855', L: '#72BF66' }
+        ],
+        dragon: { K: '#9ABEC8', B: '#5FC8D6', W: '#C2E2EA' },
+        shimmer: '#8A7044',
         santa: { K: '#C8C3B8', R: '#E0564A' },
         ghost: { G: '#D8E4EC', E: '#14181C' },
         flyGlow: '#A8C23A',
@@ -666,6 +680,33 @@
       /* Two sizes rather than two angles: hearts beat instead of tumbling. */
       heart0: ['.RR.RR.', 'RHRRRHR', 'RRRRRRR', '.RRRRR.', '..RRR..', '...R...'],
       heart2: ['.R.R.', 'RHRRR', 'RRRRR', '.RRR.', '..R..'],
+
+      /* Two frames each: the head nods one pixel. At three times scale
+         that is enough to look like a breeze. */
+      tulip0: [
+        '..TTT..', '.TTTTT.', '.TTTTT.', '..TTT..', '...S...',
+        '...S...', '.LLS...', '...SLL.', '...S...', '...S...', '...S...'
+      ],
+      tulip1: [
+        '...TTT.', '..TTTTT', '..TTTTT', '...TTT.', '...S...',
+        '...S...', '.LLS...', '...SLL.', '...S...', '...S...', '...S...'
+      ],
+      daisy0: [
+        '..P.P..', '.PPPPP.', '.PCCCP.', '.PPPPP.', '..P.P..',
+        '...S...', '...S...', '.LLS...', '...S...', '...SLL.', '...S...'
+      ],
+      daisy1: [
+        '...P.P.', '..PPPPP', '..PCCCP', '..PPPPP', '...P.P.',
+        '...S...', '...S...', '.LLS...', '...S...', '...SLL.', '...S...'
+      ],
+
+      /* Four wings, open and half-closed. */
+      dragon0: [
+        '...WW.WW...', '..W..W..W..', 'KKBBBBBBBBB', '..W..W..W..', '...WW.WW...'
+      ],
+      dragon1: [
+        '....W.W....', '...W...W...', 'KKBBBBBBBBB', '...W...W...', '....W.W....'
+      ],
 
       /* The burrow, drawn in front of him: he rises from behind the mound
          rather than out of flat ground. A dark mouth was the first idea and
@@ -874,7 +915,7 @@
     }
 
     var LEAF, PETAL, HEART, BEE, BAT, FLY, STAR, HOG, PUMPKIN, BULBS, SHELL;
-    var SPIDER, WEB, GHOST, BANNER, MOUND, SHADOW, SANTA, CONFETTI;
+    var SPIDER, WEB, GHOST, BANNER, MOUND, SHADOW, SANTA, CONFETTI, FLOWER, DRAGON;
 
     /* Sleigh, then two reindeer, strung together by their traces. */
     function buildSanta() {
@@ -972,6 +1013,15 @@
       WEB = buildWeb();
       BANNER = buildBanner();
       MOUND = bake(ART.mound, P('burrow'));
+      FLOWER = {
+        tulip: P('flower').map(function (pal) {
+          return [bake(ART.tulip0, pal), bake(ART.tulip1, pal)];
+        }),
+        daisy: P('flower').map(function (pal) {
+          return [bake(ART.daisy0, pal), bake(ART.daisy1, pal)];
+        })
+      };
+      DRAGON = [bake(ART.dragon0, P('dragon')), bake(ART.dragon1, P('dragon'))];
       SHADOW = bake(ART.shadow, P('burrow'));
       SANTA = buildSanta();
       CONFETTI = [];
@@ -984,8 +1034,14 @@
        A holiday is an override, not a sixth season: it swaps what is in the
        air, may add a fixture on the ground, and borrows a season's tileset. */
     var SCENES = {
-      spring:     { ground: 'Spring',    air: { petal: 8, bee: 3 } },
-      summer:     { ground: 'Summer',    air: { fly: 10, fluff: 4 } },
+      spring:     { ground: 'Spring',    air: { petal: 8, bee: 3 }, fixture: [
+                      { kind: 'flower', x: 0.10, type: 'tulip', set: 0, off: 0.0 },
+                      { kind: 'flower', x: 0.27, type: 'daisy', set: 2, off: 1.9 },
+                      { kind: 'flower', x: 0.45, type: 'tulip', set: 2, off: 3.4 },
+                      { kind: 'flower', x: 0.64, type: 'daisy', set: 1, off: 0.8 },
+                      { kind: 'flower', x: 0.83, type: 'tulip', set: 1, off: 2.6 }
+                    ] },
+      summer:     { ground: 'Summer',    air: { fly: 8, fluff: 4, dragon: 3 }, shimmer: true },
       fall:       { ground: 'Fall',      air: { leaf: 11 } },
       winter:     { ground: 'Winter',    air: { snow: 34 } },
 
@@ -1136,6 +1192,7 @@
         };
       },
       bee: function () { return wanderer('bee'); },
+      dragon: function () { return wanderer('dragon'); },
       fly: function () { return wanderer('fly'); },
       bat: function () { return wanderer('bat'); }
     };
@@ -1209,7 +1266,7 @@
       Object.keys(air).forEach(function (kind) {
         var fn = SPAWN[kind];
         if (!fn) return;
-        var wandering = kind === 'bee' || kind === 'fly' || kind === 'bat';
+        var wandering = kind === 'bee' || kind === 'fly' || kind === 'bat' || kind === 'dragon';
         var n = Math.round(air[kind] * CFG.count);
         if (wandering && CFG.count > 0) n = Math.max(1, n);
         for (var i = 0; i < n; i++) parts.push(fn(false));
@@ -1321,6 +1378,12 @@
               parts[i] = again;
             }
           }
+        } else if (p.kind === 'dragon') {
+          /* Hovers, then darts: now and then it throws away its target
+             early and picks another. */
+          steer(p, 0.1, 1.4);
+          if (Math.random() < 0.03) p.hold = 0;
+          p.f ^= 1;
         } else if (p.kind === 'bat') {
           steer(p, 0.05, 0.75);
           p.f ^= 1;
@@ -1384,9 +1447,19 @@
 
     /* Fixtures stand on the ground line, clipped just into the soil so the
        groundhog can rise out of it. */
-    function drawFixture() {
+    /* Anything standing on the ground line. One name, or a list of them
+       with their own positions, so a scene can plant a whole row. */
+    var FIXTURE_X = { pumpkin: 0.21, hog: 0.7 };
+
+    function fixtures() {
       var f = conf().fixture;
-      if (!f || CFG.count <= 0) return;
+      if (!f) return [];
+      return typeof f === 'string' ? [{ kind: f }] : f;
+    }
+
+    function drawFixture() {
+      var list = fixtures();
+      if (!list.length || CFG.count <= 0) return;
       var baseline = floorY + 3;
 
       ctx.save();
@@ -1395,9 +1468,24 @@
       ctx.clip();
       ctx.globalAlpha = 1;
 
-      if (f === 'pumpkin') {
+      for (var fi = 0; fi < list.length; fi++) {
+        drawOne(list[fi], baseline);
+      }
+      ctx.restore();
+    }
+
+    function drawOne(item, baseline) {
+      var f = item.kind;
+      var fx = typeof item.x === 'number' ? item.x : (FIXTURE_X[f] || 0.5);
+
+      if (f === 'flower') {
+        var bank = FLOWER[item.type] || FLOWER.tulip;
+        var pair = bank[item.set % bank.length];
+        var img = pair[reduce ? 0 : (Math.sin(tick * 0.07 + (item.off || 0)) > 0 ? 1 : 0)];
+        blit(img, Math.round(W * fx), baseline - img.height, false);
+      } else if (f === 'pumpkin') {
         var img = PUMPKIN[reduce ? 0 : (Math.abs((Math.sin(tick * 0.7) + Math.sin(tick * 0.31)) * 1.6) | 0) % 3];
-        blit(img, Math.round(W * 0.21), baseline - img.height, false);
+        blit(img, Math.round(W * fx), baseline - img.height, false);
       } else if (f === 'hog') {
         /* 14s cycle: buried, rising, up, sees it, ducks. */
         var T = reduce ? 90 : tick % 170;
@@ -1407,7 +1495,7 @@
         else if (T < 110) up = 1;
         else if (T < 122) up = 1 - (T - 110) / 12;
 
-        var hx = Math.round(W * 0.7);
+        var hx = Math.round(W * fx);
 
         if (up > 0) {
           blit(HOG, hx, baseline - Math.round(HOG.height * up), false);
@@ -1422,7 +1510,6 @@
 
         blit(MOUND, hx + Math.round((HOG.width - MOUND.width) / 2), baseline - MOUND.height, false);
       }
-      ctx.restore();
     }
 
     /* The web hangs in the top-left corner: the only corner the page leaves
@@ -1486,10 +1573,26 @@
       ctx.globalAlpha = 1;
     }
 
+    /* Heat coming off the ground: a sparse band of dashes that travels
+       along the horizon rather than flickering in place. */
+    function drawShimmer() {
+      if (!conf().shimmer || CFG.count <= 0) return;
+
+      ctx.fillStyle = P('shimmer');
+      ctx.globalAlpha = Math.min(1, CFG.alpha * 0.85);
+      for (var x = 0; x < W; x += 2) {
+        if (Math.sin(x * 0.21 + tick * 0.16) < 0.4) continue;
+        var y = floorY - 4 - Math.round(Math.sin(x * 0.1 + tick * 0.1) * 1.6);
+        ctx.fillRect(x, y, 2, 1);
+      }
+      ctx.globalAlpha = 1;
+    }
+
     function draw() {
       ctx.clearRect(0, 0, W, H);
       if (!ON || CFG.count <= 0) return;
 
+      drawShimmer();
       drawLights();
       drawWeb();
       drawBanner();
@@ -1538,6 +1641,9 @@
           var env = Math.max(0, Math.min(1, Math.min(prog, 1 - prog) / 0.16));
           ctx.globalAlpha = env * CFG.alpha * 0.9;
           blit(GHOST[p.f], p.x, p.y, false);
+        } else if (p.kind === 'dragon') {
+          ctx.globalAlpha = CFG.alpha;
+          blit(DRAGON[p.f], p.x, p.y, p.vx < 0);
         } else if (p.kind === 'bat') {
           ctx.globalAlpha = CFG.alpha;
           blit(BAT[p.f], p.x, p.y, p.vx < 0);
