@@ -316,10 +316,17 @@
 
   /* Everything on the page sits above the framebuffer. The toggle is
      already fixed with its own z-index, so it is left alone here. */
-  main, footer, .ground { position: relative; z-index: 1; }
+  main, footer { position: relative; z-index: 1; }
 
   /* The ground rises rather than appearing, so the word feels like a cause. */
   .ground {
+    /* The sky is fixed to the viewport. If the ground scrolled with the
+       page, the two halves of one scene would slide against each other.
+       Sticky holds it on the bottom edge while there is page below it,
+       then lets it settle into its real place above the footer. */
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
     flex: none;
     height: 0;
     background-repeat: repeat-x;
@@ -463,7 +470,7 @@
     'use strict';
 
     /* ---------- settled values ---------- */
-    var CFG = { px: 3, fps: 12, count: 1.1, speed: 1, alpha: 0.25, sway: 0.75, blink: 0.3, ground: 1, season: 'auto' };
+    var CFG = { px: 3, fps: 12, count: 1.1, speed: 1, alpha: 0.2, sway: 0.75, blink: 0.3, ground: 1, season: 'auto' };
 
     /* The whole seasonal layer is off until someone types this. */
     var MAGIC_WORD = 'magic';
@@ -1419,6 +1426,18 @@
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) stop(); else start();
     });
+
+    /* While the ground is pinned, the floor sits a fixed distance from the
+       bottom of the screen; as it releases, it moves. Re-measure on scroll
+       so sprites always land on the line that is actually drawn. */
+    var sTick = 0;
+    window.addEventListener('scroll', function () {
+      if (sTick || !ON) return;
+      sTick = window.requestAnimationFrame(function () {
+        sTick = 0;
+        measureFloor();
+      });
+    }, false);
 
     var rt;
     window.addEventListener('resize', function () {
