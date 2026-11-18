@@ -268,6 +268,36 @@
   :root[data-theme="light"] .icon-moon { display: block; }
 
 
+  /* ---- The Ohio, on touch devices only (the button is built in JS) ---- */
+
+  .ohio-btn {
+    position: relative;
+    display: inline-flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    line-height: 0;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A 44px target laid over the mark: big enough for a thumb, and it
+     changes no layout, so the footer line is identical either way. */
+  .ohio-btn::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
+  .ohio-btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 6px; }
+
   /* ---- The ambient layer (off until someone types the word) ---- */
 
   #sky {
@@ -1341,6 +1371,39 @@
       setGround();
       draw();
     }
+
+    /* A phone has no keyboard to type into, so the Ohio becomes the way in.
+       The button exists only where the primary pointer is a finger, and is
+       built here rather than in the markup so a desktop visitor gets a plain
+       graphic: nothing to tab to, nothing to click. The change listener
+       matters more than it looks — attaching or detaching an iPad keyboard
+       flips this mid-visit, and without it a visitor is left with neither
+       route in. */
+    var coarse = window.matchMedia('(hover: none) and (pointer: coarse)');
+    var ohio = document.querySelector('.ohio');
+    var ohioBtn = null;
+
+    function wireOhio() {
+      if (!ohio) return;
+
+      if (coarse.matches && !ohioBtn) {
+        ohioBtn = document.createElement('button');
+        ohioBtn.type = 'button';
+        ohioBtn.className = 'ohio-btn';
+        ohioBtn.setAttribute('aria-label', 'Made in Ohio');
+        ohio.parentNode.insertBefore(ohioBtn, ohio);
+        ohioBtn.appendChild(ohio);
+        ohioBtn.addEventListener('click', function () { setMagic(!ON); });
+      } else if (!coarse.matches && ohioBtn) {
+        ohioBtn.parentNode.insertBefore(ohio, ohioBtn);
+        ohioBtn.parentNode.removeChild(ohioBtn);
+        ohioBtn = null;
+      }
+    }
+
+    wireOhio();
+    if (coarse.addEventListener) coarse.addEventListener('change', wireOhio);
+    else if (coarse.addListener) coarse.addListener(wireOhio);
 
     /* index.html owns the toggle. Watch the attribute it sets, and the OS
        setting, so the sprite palettes follow the theme either way. */
