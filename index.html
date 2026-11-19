@@ -534,7 +534,7 @@
           { T: '#C98A14', P: '#D9A72E', C: '#9A6A0E', S: '#3F7A3A', L: '#4E8F45' },
           { T: '#9A5AAE', P: '#B37EC2', C: '#C9A014', S: '#3F7A3A', L: '#4E8F45' }
         ],
-        dragon: { K: '#24353D', B: '#2E6E7A', W: '#7E97A0' },
+        dragon: { K: '#24353D', B: '#2E6E7A', b: '#1C4E59', W: '#7E97A0', E: '#3F8A96' },
         shimmer: '#B8905A',
         santa: { K: '#2A2622', R: '#C0392B' },
         ghost: { G: '#8798A4', E: '#39424A' },
@@ -592,7 +592,7 @@
           { T: '#E8A62E', P: '#F2C24A', C: '#C98A14', S: '#5FA855', L: '#72BF66' },
           { T: '#BE7AD2', P: '#D2A0E0', C: '#F2C21E', S: '#5FA855', L: '#72BF66' }
         ],
-        dragon: { K: '#9ABEC8', B: '#5FC8D6', W: '#C2E2EA' },
+        dragon: { K: '#9ABEC8', B: '#5FC8D6', b: '#3FA2B0', W: '#C2E2EA', E: '#8FE4EE' },
         shimmer: '#8A7044',
         santa: { K: '#C8C3B8', R: '#E0564A' },
         ghost: { G: '#D8E4EC', E: '#14181C' },
@@ -700,12 +700,23 @@
         '...S...', '...S...', '.LLS...', '...S...', '...SLL.', '...S...'
       ],
 
-      /* Four wings, open and half-closed. */
+      /* Big eyes, a long segmented abdomen, and wings as solid blocks
+         fanning off the thorax. The first attempt spaced single pixels out
+         as wings and read as a smudge: at three pixels to the dot, a wing
+         has to be a shape. */
       dragon0: [
-        '...WW.WW...', '..W..W..W..', 'KKBBBBBBBBB', '..W..W..W..', '...WW.WW...'
+        '.WWWWW..WWWW.',
+        '..WWW....WW..',
+        'EEKKBbBbBbBbB',
+        '..WWW....WW..',
+        '.WWWWW..WWWW.'
       ],
       dragon1: [
-        '....W.W....', '...W...W...', 'KKBBBBBBBBB', '...W...W...', '....W.W....'
+        '..WWW....WW..',
+        '...W......W..',
+        'EEKKBbBbBbBbB',
+        '...W......W..',
+        '..WWW....WW..'
       ],
 
       /* The burrow, drawn in front of him: he rises from behind the mound
@@ -1801,6 +1812,11 @@
         sTick = 0;
         measureFloor();
         measureHead();
+        /* Repaint on this frame. The simulation stays at 12fps; this only
+           re-renders what is already there against the floor's new place,
+           so anything standing on the ground line stays on it mid-scroll
+           instead of floating up to 60 pixels off it. */
+        draw();
       });
     }, false);
 
