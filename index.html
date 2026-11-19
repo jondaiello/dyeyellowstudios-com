@@ -534,7 +534,7 @@
           { T: '#C98A14', P: '#D9A72E', C: '#9A6A0E', S: '#3F7A3A', L: '#4E8F45' },
           { T: '#9A5AAE', P: '#B37EC2', C: '#C9A014', S: '#3F7A3A', L: '#4E8F45' }
         ],
-        dragon: { K: '#24353D', B: '#2E6E7A', b: '#1C4E59', W: '#7E97A0', E: '#3F8A96' },
+        turkey: { B: '#4A3524', F: '#8A6A42', K: '#B0453A', L: '#C98A2E' },
         shimmer: '#B8905A',
         santa: { K: '#2A2622', R: '#C0392B' },
         ghost: { G: '#8798A4', E: '#39424A' },
@@ -592,7 +592,7 @@
           { T: '#E8A62E', P: '#F2C24A', C: '#C98A14', S: '#5FA855', L: '#72BF66' },
           { T: '#BE7AD2', P: '#D2A0E0', C: '#F2C21E', S: '#5FA855', L: '#72BF66' }
         ],
-        dragon: { K: '#9ABEC8', B: '#5FC8D6', b: '#3FA2B0', W: '#C2E2EA', E: '#8FE4EE' },
+        turkey: { B: '#8A6A48', F: '#C9A270', K: '#D9564A', L: '#E0A842' },
         shimmer: '#8A7044',
         santa: { K: '#C8C3B8', R: '#E0564A' },
         ghost: { G: '#D8E4EC', E: '#14181C' },
@@ -700,23 +700,42 @@
         '...S...', '...S...', '.LLS...', '...S...', '...SLL.', '...S...'
       ],
 
-      /* Big eyes, a long segmented abdomen, and wings as solid blocks
-         fanning off the thorax. The first attempt spaced single pixels out
-         as wings and read as a smudge: at three pixels to the dot, a wing
-         has to be a shape. */
-      dragon0: [
-        '.WWWWW..WWWW.',
-        '..WWW....WW..',
-        'EEKKBbBbBbBbB',
-        '..WWW....WW..',
-        '.WWWWW..WWWW.'
+      /* Walks, stops, pecks. The fanned tail is the whole silhouette. */
+      turkey0: [
+        '.F.F.F.....',
+        'FBFBFBF....',
+        'FBFBFBF.KK.',
+        '.FBFBF.KKKK',
+        '..BBBBBKK..',
+        '.BBBBBBB...',
+        '.BBBBBBB...',
+        '..BBBBB....',
+        '...L.L.....',
+        '..LL.LL....'
       ],
-      dragon1: [
-        '..WWW....WW..',
-        '...W......W..',
-        'EEKKBbBbBbBbB',
-        '...W......W..',
-        '..WWW....WW..'
+      turkey1: [
+        '.F.F.F.....',
+        'FBFBFBF....',
+        'FBFBFBF.KK.',
+        '.FBFBF.KKKK',
+        '..BBBBBKK..',
+        '.BBBBBBB...',
+        '.BBBBBBB...',
+        '..BBBBB....',
+        '..L...L....',
+        '.LL...LL...'
+      ],
+      turkey2: [
+        '.F.F.F.....',
+        'FBFBFBF....',
+        'FBFBFBF....',
+        '.FBFBF.....',
+        '..BBBBB....',
+        '.BBBBBBB...',
+        '.BBBBBBBKK.',
+        '..BBBBBKKKK',
+        '...L.L.....',
+        '..LL.LL....'
       ],
 
       /* The burrow, drawn in front of him: he rises from behind the mound
@@ -926,7 +945,7 @@
     }
 
     var LEAF, PETAL, HEART, BEE, BAT, FLY, STAR, HOG, PUMPKIN, BULBS, SHELL;
-    var SPIDER, WEB, GHOST, BANNER, MOUND, SHADOW, SANTA, CONFETTI, FLOWER, DRAGON;
+    var SPIDER, WEB, GHOST, BANNER, MOUND, SHADOW, SANTA, CONFETTI, FLOWER, TURKEY;
 
     /* Sleigh, then two reindeer, strung together by their traces. */
     function buildSanta() {
@@ -1032,7 +1051,7 @@
           return [bake(ART.daisy0, pal), bake(ART.daisy1, pal)];
         })
       };
-      DRAGON = [bake(ART.dragon0, P('dragon')), bake(ART.dragon1, P('dragon'))];
+      TURKEY = [bake(ART.turkey0, P('turkey')), bake(ART.turkey1, P('turkey')), bake(ART.turkey2, P('turkey'))];
       SHADOW = bake(ART.shadow, P('burrow'));
       SANTA = buildSanta();
       CONFETTI = [];
@@ -1052,7 +1071,7 @@
                       { kind: 'flower', x: 0.64, type: 'daisy', set: 1, off: 0.8 },
                       { kind: 'flower', x: 0.83, type: 'tulip', set: 1, off: 2.6 }
                     ] },
-      summer:     { ground: 'Summer',    air: { fly: 8, fluff: 4, dragon: 3 }, shimmer: true },
+      summer:     { ground: 'Summer',    air: { fly: 10, fluff: 4 }, shimmer: true },
       fall:       { ground: 'Fall',      air: { leaf: 11 } },
       winter:     { ground: 'Winter',    air: { snow: 34 } },
 
@@ -1063,7 +1082,8 @@
       groundhog:  { ground: 'Winter',    air: { snow: 14 }, fixture: 'hog' },
       valentines: { ground: 'Winter',    air: { heart: 10 } },
       july4:      { ground: 'Summer',    air: { fly: 4 }, fireworks: true },
-      halloween:  { ground: 'Fall',      air: { bat: 6, ghost: 2 }, fixture: 'pumpkin', web: true }
+      halloween:  { ground: 'Fall',      air: { bat: 6, ghost: 2 }, fixture: 'pumpkin', web: true },
+      thanksgiving: { ground: 'Fall',    air: { leaf: 7, turkey: 3 } }
     };
 
     /* ---------- state ---------- */
@@ -1092,10 +1112,19 @@
       { name: 'christmas',  month: 11, day: 25, span: 25 },
       { name: 'newyears',   month: 0,  day: 1,  span: 7 },
       { name: 'halloween',  month: 9,  day: 31, span: 10 },
+      { name: 'thanksgiving', month: 10, nth: 4, weekday: 4, span: 10 },
       { name: 'july4',      month: 6,  day: 4,  span: 10 },
       { name: 'valentines', month: 1,  day: 14, span: 10 },
       { name: 'groundhog',  month: 1,  day: 2,  span: 1 }
     ];
+
+    /* The nth given weekday of a month: Thanksgiving is the fourth
+       Thursday of November, which lands anywhere from the 22nd to the
+       28th, so it cannot be written down as a date. */
+    function nthWeekday(year, month, weekday, nth) {
+      var first = new Date(year, month, 1).getDay();
+      return 1 + ((weekday - first + 7) % 7) + (nth - 1) * 7;
+    }
 
     function holidayFor(d) {
       var y = d.getFullYear();
@@ -1108,8 +1137,9 @@
            the date that matters belongs to the year we are not in yet.
            Date() rolls a negative day back into the previous month. */
         for (var k = 0; k <= 1; k++) {
-          var start = new Date(y + k, h.month, h.day - (h.span - 1)).getTime();
-          var end = new Date(y + k, h.month, h.day).getTime();
+          var day = h.nth ? nthWeekday(y + k, h.month, h.weekday, h.nth) : h.day;
+          var start = new Date(y + k, h.month, day - (h.span - 1)).getTime();
+          var end = new Date(y + k, h.month, day).getTime();
           if (today >= start && today <= end) return h.name;
         }
       }
@@ -1203,7 +1233,17 @@
         };
       },
       bee: function () { return wanderer('bee'); },
-      dragon: function () { return wanderer('dragon'); },
+      /* A ground animal, so it keeps its own x and leaves y to the floor. */
+      turkey: function () {
+        return {
+          kind: 'turkey',
+          x: rand(6, Math.max(12, W - 18)),
+          dir: Math.random() < 0.5 ? 1 : -1,
+          mode: 0,
+          hold: 20 + ((Math.random() * 70) | 0),
+          f: 0, ft: 0, amp: 0, phase: 0
+        };
+      },
       fly: function () { return wanderer('fly'); },
       bat: function () { return wanderer('bat'); }
     };
@@ -1277,7 +1317,7 @@
       Object.keys(air).forEach(function (kind) {
         var fn = SPAWN[kind];
         if (!fn) return;
-        var wandering = kind === 'bee' || kind === 'fly' || kind === 'bat' || kind === 'dragon';
+        var wandering = kind === 'bee' || kind === 'fly' || kind === 'bat' || kind === 'turkey';
         var n = Math.round(air[kind] * CFG.count);
         if (wandering && CFG.count > 0) n = Math.max(1, n);
         for (var i = 0; i < n; i++) parts.push(fn(false));
@@ -1389,12 +1429,24 @@
               parts[i] = again;
             }
           }
-        } else if (p.kind === 'dragon') {
-          /* Hovers, then darts: now and then it throws away its target
-             early and picks another. */
-          steer(p, 0.1, 1.4);
-          if (Math.random() < 0.03) p.hold = 0;
-          p.f ^= 1;
+        } else if (p.kind === 'turkey') {
+          /* Walk a while, stop a while. Half the stops are a peck, and a
+             turn only ever happens on the way out of one. */
+          if (--p.hold <= 0) {
+            p.mode = p.mode === 0 ? (Math.random() < 0.55 ? 2 : 1) : 0;
+            if (p.mode === 0) {
+              p.hold = 50 + ((Math.random() * 110) | 0);
+              if (Math.random() < 0.45) p.dir = -p.dir;
+            } else {
+              p.hold = 20 + ((Math.random() * 45) | 0);
+            }
+          }
+          if (p.mode === 0) {
+            p.x += p.dir * 0.22 * CFG.speed;
+            if (p.x < 2) { p.x = 2; p.dir = 1; }
+            if (p.x > W - 13) { p.x = W - 13; p.dir = -1; }
+            if (++p.ft >= 4) { p.ft = 0; p.f ^= 1; }
+          }
         } else if (p.kind === 'bat') {
           steer(p, 0.05, 0.75);
           p.f ^= 1;
@@ -1652,12 +1704,11 @@
           var env = Math.max(0, Math.min(1, Math.min(prog, 1 - prog) / 0.16));
           ctx.globalAlpha = env * CFG.alpha * 0.9;
           blit(GHOST[p.f], p.x, p.y, false);
-        } else if (p.kind === 'dragon') {
-          ctx.globalAlpha = CFG.alpha;
-          blit(DRAGON[p.f], p.x, p.y, p.vx < 0);
-        } else if (p.kind === 'bat') {
-          ctx.globalAlpha = CFG.alpha;
-          blit(BAT[p.f], p.x, p.y, p.vx < 0);
+        } else if (p.kind === 'turkey') {
+          /* Solid, like everything else standing on the ground line. */
+          var timg = TURKEY[p.mode === 2 ? 2 : p.f];
+          ctx.globalAlpha = 1;
+          blit(timg, p.x, floorY + 3 - timg.height, p.dir < 0);
         } else if (p.kind === 'fly') {
           /* Cubed sine: mostly dark with a short bright flash. */
           var g = Math.pow((Math.sin(p.phase) + 1) / 2, 3);
