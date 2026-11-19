@@ -1,4 +1,20 @@
 <!doctype html>
+
+<!--
+  +----------------------------------------------------+
+  |                                                    |
+  |   You went looking in the source. Good instinct:   |
+  |   that is roughly how all of this got built.       |
+  |                                                    |
+  |   Type   M A G I C   anywhere on the page.         |
+  |   Type it again to put everything back.            |
+  |                                                    |
+  |   What you get depends on the day.                 |
+  |                                                    |
+  |                               Dye Yellow Studios   |
+  +----------------------------------------------------+
+-->
+
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -34,6 +50,11 @@
 <style>
   /* ---- Light (default) ---- */
   :root {
+    /* The page's own theme, told to the browser. Without this the UA
+       follows the OS, and the strip behind Safari's bottom bar stays
+       light while an explicitly dark page sits above it. */
+    color-scheme: light;
+
     --yellow: #F7E733;        /* lemon, both themes */
     --bg: #FAF8F3;
     --fg: #111110;
@@ -50,6 +71,7 @@
   /* ---- Dark: same lemon as light mode ---- */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
+      color-scheme: dark;
       --yellow: #F7E733;
       --bg: #100F0C;
       --fg: #F2F2EC;
@@ -64,6 +86,7 @@
   }
 
   :root[data-theme="dark"] {
+    color-scheme: dark;
     --yellow: #F7E733;
     --bg: #100F0C;
     --fg: #F2F2EC;
@@ -79,6 +102,8 @@
   * { box-sizing: border-box; }
 
   html, body { margin: 0; }
+
+  html { background: var(--bg); }
 
   body {
     background: var(--bg);
@@ -251,6 +276,78 @@
   :root[data-theme="light"] .icon-sun { display: none; }
   :root[data-theme="light"] .icon-moon { display: block; }
 
+
+  /* ---- The Ohio, on touch devices only (the button is built in JS) ---- */
+
+  .ohio-btn {
+    position: relative;
+    display: inline-flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    line-height: 0;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A 44px target laid over the mark: big enough for a thumb, and it
+     changes no layout, so the footer line is identical either way. */
+  .ohio-btn::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
+  .ohio-btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 6px; }
+
+  /* ---- The ambient layer (off until someone types the word) ---- */
+
+  #sky {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    image-rendering: pixelated;
+    opacity: 0;
+    transition: opacity 700ms ease;
+  }
+
+  :root.magic #sky { opacity: 1; }
+
+  /* Everything on the page sits above the framebuffer. The toggle is
+     already fixed with its own z-index, so it is left alone here. */
+  main, footer { position: relative; z-index: 1; }
+
+  /* The ground rises rather than appearing, so the word feels like a cause. */
+  .ground {
+    /* The sky is fixed to the viewport. If the ground scrolled with the
+       page, the two halves of one scene would slide against each other.
+       Sticky holds it on the bottom edge while there is page below it,
+       then lets it settle into its real place above the footer. */
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    flex: none;
+    height: 0;
+    background-repeat: repeat-x;
+    background-position: left bottom;
+    image-rendering: pixelated;
+    transition: height 460ms cubic-bezier(0.2, 0.75, 0.25, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #sky, .ground { transition: none; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .cta { transition: none; }
     .cta:hover, .cta:focus-visible { transform: none; }
@@ -259,6 +356,8 @@
 </style>
 </head>
 <body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+
   <button class="theme-toggle" id="themeToggle" type="button" hidden
           aria-label="Switch theme" title="Switch theme">
     <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -304,6 +403,8 @@
       <a class="cta" href="mailto:hello@dyeyellowstudios.com">Get in touch</a>
     </div>
   </main>
+
+  <div class="ground" id="ground"></div>
 
   <footer>
     <p class="made">
@@ -371,6 +472,1427 @@
       syncLabel();
       if (root.hasAttribute('data-theme')) syncChrome(current());
     })();
+  </script>
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ---------- settled values ---------- */
+    var CFG = { px: 3, fps: 12, count: 1.1, speed: 1, alpha: 0.2, sway: 0.75, blink: 0.3, ground: 1, season: 'auto' };
+
+    /* The whole seasonal layer is off until someone types this. */
+    var MAGIC_WORD = 'magic';
+    var MAGIC_KEY = 'dys-magic';
+    var FORCED = false;
+
+    /* ?season=halloween shows a scene out of season, already switched on.
+       There is no control for it on the page: it is for looking at the
+       thing in July. */
+    try {
+      var q = (window.location.search.match(/[?&]season=([a-z0-9]+)/i) || [])[1];
+      if (q) { CFG.season = q.toLowerCase(); FORCED = true; }
+    } catch (e) { /* no query string is fine */ }
+
+    /* ---------- palettes, one full set per theme ----------
+       Pixel art cannot share a palette across a cream and a near-black page:
+       measured at 35% fade, every pale sprite sits at 1.02-1.24 contrast on
+       cream (invisible) and every dark one at 1.02-1.16 on black. So each
+       theme gets its own values, the way the page's own CSS gives --logo a
+       value per theme. Sprites are re-baked when the theme changes. */
+    var PALETTE = {
+      light: {
+        leaf: [
+          { O: '#7A3310', Y: '#C9801F' },
+          { O: '#8A5A16', Y: '#C59A2E' },
+          { O: '#6E2A12', Y: '#A8521A' }
+        ],
+        petal: [
+          { P: '#D23479', p: '#F0A6C4' },
+          { P: '#DC5A8E', p: '#F6C8DC' },
+          { P: '#8A72BE', p: '#C9BCE0' },
+          { P: '#8A7A52', p: '#A89770' }
+        ],
+        heart: [
+          { R: '#D8325C', H: '#F799B4' },
+          { R: '#C42A50', H: '#EE6C8E' },
+          { R: '#B82A4E', H: '#E07B96' }
+        ],
+        bee: { K: '#2B2416', Y: '#E0B41A', W: '#9FB8C4' },
+        bat: { K: '#1A1620', D: '#3A3048', E: '#C2423A' },
+        hog: { K: '#2A1C10', B: '#8A5F33', T: '#C9A273', E: '#17110A', N: '#4A3020' },
+        pumpkin: { K: '#2A1206', O: '#D96A14', D: '#B04E0C', S: '#4A6B2A' },
+        pumpkinGlow: ['#BFAE0C', '#B07E12', '#C9BA3A'],
+        snow: '#6E96AD',
+        snowDim: '#4A7B96',
+        web: '#8F897B',
+        spider: { K: '#231F1A', E: '#B9A92E' },
+        banner: '#111110',
+        burrow: { D: '#2B1B0E', E: '#6B4A2A', K: '#4A3A2C' },
+        flower: [
+          { T: '#C83F5E', P: '#D9637E', C: '#C9A014', S: '#3F7A3A', L: '#4E8F45' },
+          { T: '#C98A14', P: '#D9A72E', C: '#9A6A0E', S: '#3F7A3A', L: '#4E8F45' },
+          { T: '#9A5AAE', P: '#B37EC2', C: '#C9A014', S: '#3F7A3A', L: '#4E8F45' }
+        ],
+        turkey: { B: '#4A3524', F: '#A98258', D: '#2A1D12', K: '#B0453A', L: '#C98A2E' },
+        shimmer: '#B8905A',
+        santa: { K: '#2A2622', R: '#C0392B' },
+        ghost: { G: '#8798A4', E: '#39424A' },
+        flyGlow: '#5A681F',
+        flyCore: '#8A8420',
+        wire: '#3B2F1F',
+        socket: '#8A8475',
+        bulbs: [
+          { on: '#D03A2C', off: '#C9A8A2' },
+          { on: '#2A8A4C', off: '#A8C2B0' },
+          { on: '#8E8208', off: '#C4C0A8' },
+          { on: '#2A86BC', off: '#A8BECC' }
+        ],
+        shells: [
+          ['#D03A2C', '#E89A90'], ['#6E8A9A', '#A8BEC8'], ['#1F7FB8', '#7FAFCE'],
+          ['#8E8208', '#BFB44A'], ['#2A8A4C', '#7FBF96']
+        ],
+        tile: {
+          tileWinter: { W: '#C2D6E2', w: '#A8C4D6', B: '#5B93AE', b: '#74A8C2' },
+          tileChristmas: { W: '#C2D6E2', w: '#A8C4D6', R: '#D8352A' }
+        }
+      },
+      dark: {
+        leaf: [
+          { O: '#7A3310', Y: '#E89A2B' },
+          { O: '#8A5A16', Y: '#F0C14A' },
+          { O: '#6E2A12', Y: '#C76A22' }
+        ],
+        petal: [
+          { P: '#E27BA8', p: '#F6C8DC' },
+          { P: '#F0A6C4', p: '#FCE3EE' },
+          { P: '#D9D2E8', p: '#F6F2FA' },
+          { P: '#E8E0C8', p: '#FFFFFF' }
+        ],
+        heart: [
+          { R: '#D8325C', H: '#F799B4' },
+          { R: '#E85A7E', H: '#FBC2D2' },
+          { R: '#B82A4E', H: '#E07B96' }
+        ],
+        bee: { K: '#2B2416', Y: '#F2C21E', W: '#E8F0F4' },
+        /* A black bat on a black page is 1.02 contrast, so it comes up to slate. */
+        bat: { K: '#8A7CA2', D: '#6A5C82', E: '#E0564A' },
+        hog: { K: '#6A472A', B: '#8A5F33', T: '#C9A273', E: '#17110A', N: '#4A3020' },
+        pumpkin: { K: '#7A3410', O: '#D96A14', D: '#B04E0C', S: '#4A6B2A' },
+        pumpkinGlow: ['#F7E733', '#F2B33A', '#FFF4A8'],
+        snow: '#FFFFFF',
+        snowDim: '#CFE2EC',
+        /* A black spider on a black page is invisible, so it comes up to ash. */
+        web: '#7A7E72',
+        spider: { K: '#9A9D92', E: '#F7E733' },
+        banner: '#F7E733',
+        burrow: { D: '#0A0806', E: '#6B4A2A', K: '#2A241C' },
+        flower: [
+          { T: '#E8536F', P: '#F0859A', C: '#F2C21E', S: '#5FA855', L: '#72BF66' },
+          { T: '#E8A62E', P: '#F2C24A', C: '#C98A14', S: '#5FA855', L: '#72BF66' },
+          { T: '#BE7AD2', P: '#D2A0E0', C: '#F2C21E', S: '#5FA855', L: '#72BF66' }
+        ],
+        turkey: { B: '#8A6A48', F: '#D4B088', D: '#4A3524', K: '#D9564A', L: '#E0A842' },
+        shimmer: '#8A7044',
+        santa: { K: '#C8C3B8', R: '#E0564A' },
+        ghost: { G: '#D8E4EC', E: '#14181C' },
+        flyGlow: '#A8C23A',
+        flyCore: '#F8F4B0',
+        wire: '#8A6E48',
+        socket: '#CFC8B4',
+        bulbs: [
+          { on: '#F25A4A', off: '#6E2B26' },
+          { on: '#4FD07A', off: '#24532F' },
+          { on: '#F7E733', off: '#6E6420' },
+          { on: '#58B6F0', off: '#24465E' }
+        ],
+        shells: [
+          ['#F25A4A', '#FFD9D4'], ['#FFFFFF', '#CFE2EC'], ['#58B6F0', '#D4EEFF'],
+          ['#F7E733', '#FFFBD0'], ['#4FD07A', '#D6F7E2']
+        ],
+        tile: {
+          tileWinter: { W: '#FFFFFF', w: '#D6E6EE', B: '#5B93AE', b: '#74A8C2' },
+          tileChristmas: { W: '#FFFFFF', w: '#D6E6EE', R: '#D8352A' }
+        }
+      }
+    };
+
+    var mql = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function currentTheme() {
+      var a = document.documentElement.getAttribute('data-theme');
+      if (a === 'light' || a === 'dark') return a;
+      return mql.matches ? 'dark' : 'light';
+    }
+
+    var THEME = currentTheme();
+    function P(k) { return PALETTE[THEME][k]; }
+
+    /* Tiles that read the same on either ground stay in one table. */
+    var TILE_BASE = {
+      tileSpring: { G: '#2F7D3A', L: '#6FBF4A', P: '#E27BA8', Y: '#F7E733', D: '#4A3728', d: '#5E4836' },
+      tileSummer: { G: '#2A6B33', L: '#4E9E3C', D: '#5A4328', d: '#6E543A' },
+      tileFall: { O: '#7A3310', R: '#C2521A', Y: '#E89A2B', D: '#4A3728', d: '#5E4836' }
+    };
+
+    function tileKey(name) {
+      return P('tile')[name] || TILE_BASE[name];
+    }
+
+    /* ---------- sprites: '.' is transparent ----------
+       Maple: a centre point, two upper lobes split by notches, side lobes at
+       the waist, and a midrib down the middle. Oak: alternating round lobes
+       on a long axis. Frame 1 is the three-quarter view, frame 2 edge-on;
+       played 0-1-2-1 they read as a tumble without any real rotation. */
+    var ART = {
+      maple0: [
+        '.....O.....', '....OYO....', '.O..OYO..O.', 'OYO.OYO.OYO',
+        'OYYOOYOOYYO', '.OYYYOYYYO.', 'OOYYYOYYYOO', '.OYYYOYYYO.',
+        '..OYYOYYO..', '...OOYOO...', '.....O.....', '.....O.....'
+      ],
+      maple1: [
+        '.....O.....', '....OYO....', '..O.OYO.O..', '..OYOYOYO..',
+        '...OYOYO...', '...OYOYO...', '..OYYOYYO..', '...OYOYO...',
+        '....OYO....', '....OOO....', '.....O.....', '.....O.....'
+      ],
+      maple2: [
+        '.....O.....', '.....O.....', '....OYO....', '....OYO....',
+        '....OYO....', '....OYO....', '....OYO....', '....OYO....',
+        '.....O.....', '.....O.....', '.....O.....', '.....O.....'
+      ],
+      oak0: [
+        '....O....', '...OYO...', '..OYYYO..', '.OYYYYYO.', '..OYOYO..',
+        '.OYYOYYO.', 'OYYYOYYYO', '.OYYOYYO.', '..OYOYO..', '.OYYOYYO.',
+        '..OYOYO..', '...OOO...', '....O....'
+      ],
+      oak1: [
+        '....O....', '...OYO...', '...OYO...', '..OYYYO..', '...OYO...',
+        '..OYOYO..', '..OYOYO..', '...OYO...', '..OYOYO..', '...OYO...',
+        '...OYO...', '...OOO...', '....O....'
+      ],
+      oak2: [
+        '....O....', '....O....', '...OYO...', '...OYO...', '...OYO...',
+        '...OYO...', '...OYO...', '...OYO...', '...OYO...', '...OYO...',
+        '....O....', '....O....', '....O....'
+      ],
+      petal0: ['.PPP.', 'PpppP', '.PPP.'],
+      petal1: ['..P..', '.PpP.', '..P..'],
+      /* Two sizes rather than two angles: hearts beat instead of tumbling. */
+      heart0: ['.RR.RR.', 'RHRRRHR', 'RRRRRRR', '.RRRRR.', '..RRR..', '...R...'],
+      heart2: ['.R.R.', 'RHRRR', 'RRRRR', '.RRR.', '..R..'],
+
+      /* Two frames each: the head nods one pixel. At three times scale
+         that is enough to look like a breeze. */
+      tulip0: [
+        '..TTT..', '.TTTTT.', '.TTTTT.', '..TTT..', '...S...',
+        '...S...', '.LLS...', '...SLL.', '...S...', '...S...', '...S...'
+      ],
+      tulip1: [
+        '...TTT.', '..TTTTT', '..TTTTT', '...TTT.', '...S...',
+        '...S...', '.LLS...', '...SLL.', '...S...', '...S...', '...S...'
+      ],
+      daisy0: [
+        '..P.P..', '.PPPPP.', '.PCCCP.', '.PPPPP.', '..P.P..',
+        '...S...', '...S...', '.LLS...', '...S...', '...SLL.', '...S...'
+      ],
+      daisy1: [
+        '...P.P.', '..PPPPP', '..PCCCP', '..PPPPP', '...P.P.',
+        '...S...', '...S...', '.LLS...', '...S...', '...SLL.', '...S...'
+      ],
+
+      /* Walks, stops, pecks. The fan hangs off the BACK of the bird, not
+         the top of it: its hinge is level with the body, so most of its
+         mass is behind the turkey and only its upper feathers rise over
+         the back. Centred above the body it read as a diamond balanced on
+         a bird, which is what the first three attempts all did. */
+      turkey0: [
+        '...F..F.......',
+        '.F.FD.F.......',
+        'F.FDFDF.......',
+        '.FDFDFDF......',
+        'FDFDFDFD...KK.',
+        '.FDFDFDB..KKKK',
+        'FDFDFDBBBBKK..',
+        '.FDFDBBBBBK...',
+        '..FDBBBBBB....',
+        '....L..L......',
+        '...LL..LL.....'
+      ],
+      turkey1: [
+        '...F..F.......',
+        '.F.FD.F.......',
+        'F.FDFDF.......',
+        '.FDFDFDF......',
+        'FDFDFDFD...KK.',
+        '.FDFDFDB..KKKK',
+        'FDFDFDBBBBKK..',
+        '.FDFDBBBBBK...',
+        '..FDBBBBBB....',
+        '.....L..L.....',
+        '....LL..LL....'
+      ],
+      turkey2: [
+        '...F..F.......',
+        '.F.FD.F.......',
+        'F.FDFDF.......',
+        '.FDFDFDF......',
+        'FDFDFDFD......',
+        '.FDFDFDB......',
+        'FDFDFDBBBB....',
+        '.FDFDBBBBBK...',
+        '..FDBBBBBB.KKK',
+        '....L..L...K..',
+        '...LL..LL.....'
+      ],
+
+      /* The burrow, drawn in front of him: he rises from behind the mound
+         rather than out of flat ground. A dark mouth was the first idea and
+         it did not survive — at this size it is three pixels nobody sees. */
+      mound: [
+        '...EEEEEEEEEEE...',
+        '..EEEEEEEEEEEEE..',
+        '.EEEEEEEEEEEEEEE.',
+        'EEEEEEEEEEEEEEEEE'
+      ],
+      shadow: ['.KKKKK.', 'KKKKKKK'],
+
+      /* A silhouette, on purpose. At eight pixels tall, harness and antlers
+         and a face turn to mush; an outline against the sky does not. */
+      deer: [
+        '........K.K',
+        '.........KK',
+        '.KKKKKKKKKK',
+        'KKKKKKKKKKK',
+        'KKKKKKKKKK.',
+        '.K.K..K.K..',
+        '.K.K..K.K..',
+        'K...K.K...K'
+      ],
+      deerLead: [
+        '........K.K',
+        '.........KK',
+        '.KKKKKKKKKK',
+        'KKKKKKKKKKR',
+        'KKKKKKKKKK.',
+        '.K.K..K.K..',
+        '.K.K..K.K..',
+        'K...K.K...K'
+      ],
+      sled: [
+        '...........',
+        '.......K...',
+        '......KKK..',
+        '.....KKKK..',
+        'K....KKKKK.',
+        'KK..KKKKKKK',
+        '.KKKKKKKKKK',
+        '..KKKKKKKK.'
+      ],
+      bee0: ['..WWW...', '..WWW...', '.YKYKYKK', 'KYKYKYKK', '.YKYKYK.', '..K.K...'],
+      bee1: ['........', '...WW...', '.YKYKYKK', 'KYKYKYKK', '.YKYKYK.', '..K.K...'],
+      bat0: [
+        '...........', '.K.......K.', 'KDK.KKK.KDK', 'KDDKKEKKDDK',
+        '.KDKKKKKDK.', '...KKKKK...', '....K.K....'
+      ],
+      bat1: [
+        'KK.......KK', 'KDK.....KDK', '.KDK.K.KDK.', '..KKKEKKK..',
+        '...KKKKK...', '....K.K....', '...........'
+      ],
+      fly: ['.G.', 'GCG', '.G.'],
+      star: ['..X..', 'X.X.X', '.XXX.', 'X.X.X', '..X..'],
+      bulb: ['SSS', 'BBB', 'BBB', '.B.'],
+      /* Fixtures that sit on the ground line. */
+      ghost0: [
+        '...GGGG...',
+        '..GGGGGG..',
+        '.GGGGGGGG.',
+        '.GGGGGGGG.',
+        'GGEGGGGEGG',
+        'GGEGGGGEGG',
+        'GGGGGGGGGG',
+        'GGGGMMGGGG',
+        'GGGGGGGGGG',
+        'GGGGGGGGGG',
+        'GG.GG.GG.G',
+        'G...G...G.'
+      ],
+      ghost1: [
+        '...GGGG...',
+        '..GGGGGG..',
+        '.GGGGGGGG.',
+        '.GGGGGGGG.',
+        'GGEGGGGEGG',
+        'GGEGGGGEGG',
+        'GGGGGGGGGG',
+        'GGGGMMGGGG',
+        'GGGGGGGGGG',
+        'GGGGGGGGGG',
+        '.GG.GG.GG.',
+        '.G...G...G'
+      ],
+      spider0: [
+        '.K.....K.',
+        '..K...K..',
+        'K..KKK..K',
+        '.KKKKKKK.',
+        '.KEKKKEK.',
+        '.KKKKKKK.',
+        'K..KKK..K',
+        '..K...K..',
+        '.K.....K.'
+      ],
+      spider1: [
+        '..K...K..',
+        '.K.K.K.K.',
+        '...KKK...',
+        '.KKKKKKK.',
+        '.KEKKKEK.',
+        '.KKKKKKK.',
+        '...KKK...',
+        '.K.K.K.K.',
+        '..K...K..'
+      ],
+      pumpkin: [
+        '.....SS......',
+        '....KSSK.....',
+        '..KKKKKKKKK..',
+        '.KOODOOODOOK.',
+        'KOODOOODOOOOK',
+        'KOGGOOOOOGGOK',
+        'KOOGOOOOOGOOK',
+        'KOOOOGGGOOOOK',
+        'KOGGGGOGGGGOK',
+        '.KOGOGGGOGOK.',
+        '..KKKKKKKKK..'
+      ],
+      hog: [
+        '..K.....K..', '.KBK...KBK.', '.KBBKKKBBK.', '..KBBBBBK..',
+        '.KBBBBBBBK.', '.KBEBBBEBK.', '.KBBBTBBBK.', '..KBTNTBK..',
+        '...KBTBK...', '..KBBBBBK..', '.KBBTTTBBK.', '.KBBTTTBBK.',
+        '.KBBBBBBBK.', '..KKKKKKK..'
+      ],
+      tileSpring: [
+        '...P.......Y....', '..LGL.L...LGL..L', 'LGGGLLGL.LGGGLLG',
+        'GGGGGGGGGGGGGGGG', 'LGLGGLGLGGLGLGGL', 'DDDDDDDDDDDDDDDD',
+        'dDdDDdDdDDdDdDDd', 'DDDdDDDDdDDDdDDD'
+      ],
+      tileSummer: [
+        '..L...L....L....', '.LGL.LGL..LGL.L.', 'LGGGLGGGL.GGGLGL',
+        'GGGGGGGGGGGGGGGG', 'GGGGGGGGGGGGGGGG', 'LGLGGLGLGGLGLGGL',
+        'DDDDDDDDDDDDDDDD', 'dDdDDdDdDDdDdDDd'
+      ],
+      tileFall: [
+        '...R.......Y....', '..ORO..Y..OYO...', '.OYRO.OYO.ORYO..',
+        'DDDDDDDDDDDDDDDD', 'dDdDDdDdDDdDdDDd', 'DDdDDDdDDDdDDDdD',
+        'DdDDdDdDDdDdDDdD', 'DDDdDDDDdDDDdDDD'
+      ],
+      tileWinter: [
+        '.....WWW........', '..WWWWWWWW..WWW.', 'WWWWWWWWWWWWWWWW',
+        'wWwWWwWwWWwWwWWw', 'BBBBBBBBBBBBBBBB', 'BbBBBbBBBbBBBbBB',
+        'bBBBbBBBbBBBbBBB', 'BBBBBBBBBBBBBBBB'
+      ],
+      tileChristmas: [
+        '.....WWW........', '..WWWWWWWW..WWW.', 'WWWWWWWWWWWWWWWW',
+        'wWwWWwWwWWwWwWWw', 'RRWWRRWWRRWWRRWW', 'RRWWRRWWRRWWRRWW',
+        'WWRRWWRRWWRRWWRR', 'WWRRWWRRWWRRWWRR'
+      ]
+    };
+
+    function bake(rows, key) {
+      var c = document.createElement('canvas');
+      c.width = rows[0].length;
+      c.height = rows.length;
+      var g = c.getContext('2d');
+      for (var y = 0; y < rows.length; y++) {
+        for (var x = 0; x < rows[y].length; x++) {
+          var col = key[rows[y][x]];
+          if (!col) continue;
+          g.fillStyle = col;
+          g.fillRect(x, y, 1, 1);
+        }
+      }
+      return c;
+    }
+
+    /* Enough of an alphabet for one sentence. 5x7, the size arcade
+       machines used, which at PX = 3 is 15 by 21 real pixels. */
+    var FONT = {
+      ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
+      A: ['.XXX.', 'X...X', 'X...X', 'XXXXX', 'X...X', 'X...X', 'X...X'],
+      E: ['XXXXX', 'X....', 'X....', 'XXXX.', 'X....', 'X....', 'XXXXX'],
+      H: ['X...X', 'X...X', 'X...X', 'XXXXX', 'X...X', 'X...X', 'X...X'],
+      N: ['X...X', 'XX..X', 'X.X.X', 'X.X.X', 'X..XX', 'X...X', 'X...X'],
+      P: ['XXXX.', 'X...X', 'X...X', 'XXXX.', 'X....', 'X....', 'X....'],
+      R: ['XXXX.', 'X...X', 'X...X', 'XXXX.', 'X.X..', 'X..X.', 'X...X'],
+      W: ['X...X', 'X...X', 'X...X', 'X.X.X', 'X.X.X', 'XX.XX', 'X...X'],
+      Y: ['X...X', 'X...X', '.X.X.', '..X..', '..X..', '..X..', '..X..']
+    };
+
+    var BANNER_TEXT = 'HAPPY NEW YEAR';
+
+    function buildBanner() {
+      var gw = 5, gh = 7, gap = 1;
+      var n = BANNER_TEXT.length;
+      var c = document.createElement('canvas');
+      c.width = n * (gw + gap) - gap;
+      c.height = gh;
+      var g = c.getContext('2d');
+      g.fillStyle = P('banner');
+
+      for (var i = 0; i < n; i++) {
+        var rows = FONT[BANNER_TEXT.charAt(i)];
+        if (!rows) continue;
+        for (var y = 0; y < gh; y++) {
+          for (var x = 0; x < gw; x++) {
+            if (rows[y].charAt(x) === 'X') g.fillRect(i * (gw + gap) + x, y, 1, 1);
+          }
+        }
+      }
+      return c;
+    }
+
+    var LEAF, PETAL, HEART, BEE, BAT, FLY, STAR, HOG, PUMPKIN, BULBS, SHELL;
+    var SPIDER, WEB, GHOST, BANNER, MOUND, SHADOW, SANTA, CONFETTI, FLOWER, TURKEY;
+
+    /* Sleigh, then two reindeer, strung together by their traces. */
+    function buildSanta() {
+      var pal = P('santa');
+      var sled = bake(ART.sled, pal);
+      var deer = bake(ART.deer, pal);
+      var lead = bake(ART.deerLead, pal);
+
+      var c = document.createElement('canvas');
+      c.width = 39;
+      c.height = 8;
+      var g = c.getContext('2d');
+      g.fillStyle = pal.K;
+      g.fillRect(11, 5, 17, 1);
+      g.drawImage(sled, 0, 0);
+      g.drawImage(deer, 14, 0);
+      g.drawImage(lead, 28, 0);
+      return c;
+    }
+
+    /* Lub-dub, then a rest: 1 is the big frame. */
+    var BEAT = [1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0];
+
+    /* The corner web is drawn rather than authored: five radials out of the
+       corner, four sagging rings across them, one pixel at a time so it stays
+       on the same grid as every sprite. */
+    var WEB_R = 34;
+    function buildWeb() {
+      var c = document.createElement('canvas');
+      c.width = WEB_R + 1;
+      c.height = WEB_R + 1;
+      var g = c.getContext('2d');
+      var spokes = 5, rings = 4, i, k, t, a;
+      g.fillStyle = P('web');
+
+      for (i = 0; i < spokes; i++) {
+        a = (i / (spokes - 1)) * (Math.PI / 2);
+        for (var r = 3; r <= WEB_R; r++) {
+          if (r % 7 === 6) continue; /* a couple of gaps: a perfect web looks printed */
+          g.fillRect(Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r), 1, 1);
+        }
+      }
+
+      for (k = 1; k <= rings; k++) {
+        var rr = 6 + (WEB_R - 6) * (k / rings);
+        for (i = 0; i < spokes - 1; i++) {
+          var a0 = (i / (spokes - 1)) * (Math.PI / 2);
+          var a1 = ((i + 1) / (spokes - 1)) * (Math.PI / 2);
+          for (t = 0; t <= 1.0001; t += 0.05) {
+            a = a0 + (a1 - a0) * t;
+            var sag = rr * (1 - 0.1 * Math.sin(t * Math.PI));
+            g.fillRect(Math.round(Math.cos(a) * sag), Math.round(Math.sin(a) * sag), 1, 1);
+          }
+        }
+      }
+      return c;
+    }
+
+    /* Every sprite canvas is rebuilt from the active theme's palette. */
+    function rebake() {
+      LEAF = [];
+      [['maple0', 'maple1', 'maple2'], ['oak0', 'oak1', 'oak2']].forEach(function (shape) {
+        P('leaf').forEach(function (pal) {
+          LEAF.push(shape.map(function (n) { return bake(ART[n], pal); }));
+        });
+      });
+      PETAL = P('petal').map(function (pal) {
+        return [bake(ART.petal0, pal), bake(ART.petal1, pal)];
+      });
+      /* [0] is the small beat, [1] the big one. */
+      HEART = P('heart').map(function (pal) {
+        return [bake(ART.heart2, pal), bake(ART.heart0, pal)];
+      });
+      BEE = [bake(ART.bee0, P('bee')), bake(ART.bee1, P('bee'))];
+      BAT = [bake(ART.bat0, P('bat')), bake(ART.bat1, P('bat'))];
+      FLY = bake(ART.fly, { G: P('flyGlow'), C: P('flyCore') });
+      STAR = bake(ART.star, { X: P('snow') });
+      HOG = bake(ART.hog, P('hog'));
+      PUMPKIN = P('pumpkinGlow').map(function (g) {
+        var k = P('pumpkin');
+        return bake(ART.pumpkin, { K: k.K, O: k.O, D: k.D, S: k.S, G: g });
+      });
+      BULBS = P('bulbs').map(function (b) {
+        return {
+          on: bake(ART.bulb, { S: P('socket'), B: b.on }),
+          off: bake(ART.bulb, { S: P('socket'), B: b.off })
+        };
+      });
+      SHELL = P('shells');
+      SPIDER = [bake(ART.spider0, P('spider')), bake(ART.spider1, P('spider'))];
+      GHOST = [
+        bake(ART.ghost0, { G: P('ghost').G, E: P('ghost').E, M: P('ghost').E }),
+        bake(ART.ghost1, { G: P('ghost').G, E: P('ghost').E, M: P('ghost').E })
+      ];
+      WEB = buildWeb();
+      BANNER = buildBanner();
+      MOUND = bake(ART.mound, P('burrow'));
+      FLOWER = {
+        tulip: P('flower').map(function (pal) {
+          return [bake(ART.tulip0, pal), bake(ART.tulip1, pal)];
+        }),
+        daisy: P('flower').map(function (pal) {
+          return [bake(ART.daisy0, pal), bake(ART.daisy1, pal)];
+        })
+      };
+      TURKEY = [bake(ART.turkey0, P('turkey')), bake(ART.turkey1, P('turkey')), bake(ART.turkey2, P('turkey'))];
+      SHADOW = bake(ART.shadow, P('burrow'));
+      SANTA = buildSanta();
+      CONFETTI = [];
+      SHELL.forEach(function (sh) { CONFETTI.push(sh[0], sh[1]); });
+    }
+
+    var TUMBLE = [0, 1, 2, 1];
+
+    /* ---------- scenes ----------
+       A holiday is an override, not a sixth season: it swaps what is in the
+       air, may add a fixture on the ground, and borrows a season's tileset. */
+    var SCENES = {
+      spring:     { ground: 'Spring',    air: { petal: 8, bee: 3 }, fixture: [
+                      { kind: 'flower', x: 0.10, type: 'tulip', set: 0, off: 0.0 },
+                      { kind: 'flower', x: 0.27, type: 'daisy', set: 2, off: 1.9 },
+                      { kind: 'flower', x: 0.45, type: 'tulip', set: 2, off: 3.4 },
+                      { kind: 'flower', x: 0.64, type: 'daisy', set: 1, off: 0.8 },
+                      { kind: 'flower', x: 0.83, type: 'tulip', set: 1, off: 2.6 }
+                    ] },
+      summer:     { ground: 'Summer',    air: { fly: 10, fluff: 4 }, shimmer: true },
+      fall:       { ground: 'Fall',      air: { leaf: 11 } },
+      winter:     { ground: 'Winter',    air: { snow: 34 } },
+
+      /* Holidays. Christmas is one of these, not a fifth season: winter runs
+         the whole of December underneath it. */
+      christmas:  { ground: 'Christmas', air: { snow: 22 }, lights: true, santa: true },
+      newyears:   { ground: 'Winter',    air: { snow: 10, confetti: 16 }, fireworks: true, banner: true },
+      groundhog:  { ground: 'Winter',    air: { snow: 14 }, fixture: 'hog' },
+      valentines: { ground: 'Winter',    air: { heart: 10 } },
+      july4:      { ground: 'Summer',    air: { fly: 4 }, fireworks: true },
+      halloween:  { ground: 'Fall',      air: { bat: 6, ghost: 2 }, fixture: 'pumpkin', web: true },
+      thanksgiving: { ground: 'Fall',    air: { leaf: 7, turkey: 3 } }
+    };
+
+    /* ---------- state ---------- */
+    var canvas = document.getElementById('sky');
+    var ctx = canvas.getContext('2d');
+    var ground = document.getElementById('ground');
+
+    var W = 0, H = 0, floorY = 0, tick = 0, last = 0, raf = 0;
+    var ON = false;
+    var headroom = 0;
+    var scene = 'fall';
+    var parts = [];
+    var lights = [];
+    var nextRocket = 40;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function rand(a, b) { return a + Math.random() * (b - a); }
+    function conf() { return SCENES[scene] || SCENES.fall; }
+
+    /* Holidays win over seasons. Spring Mar-May, summer Jun-Aug,
+       fall Sep-Nov, Christmas Dec 1-26, winter Dec 27-Feb. */
+    /* Each holiday owns a run of days ending on the day itself: ten for
+       most, and twenty-five for Christmas, which opens on December 1.
+       Listed in precedence order, though none of these overlap. */
+    var HOLIDAYS = [
+      { name: 'christmas',  month: 11, day: 25, span: 25 },
+      { name: 'newyears',   month: 0,  day: 1,  span: 7 },
+      { name: 'halloween',  month: 9,  day: 31, span: 10 },
+      { name: 'thanksgiving', month: 10, nth: 4, weekday: 4, span: 5 },
+      { name: 'july4',      month: 6,  day: 4,  span: 10 },
+      { name: 'valentines', month: 1,  day: 14, span: 10 },
+      { name: 'groundhog',  month: 1,  day: 2,  span: 1 }
+    ];
+
+    /* The nth given weekday of a month: Thanksgiving is the fourth
+       Thursday of November, which lands anywhere from the 22nd to the
+       28th, so it cannot be written down as a date. */
+    function nthWeekday(year, month, weekday, nth) {
+      var first = new Date(year, month, 1).getDay();
+      return 1 + ((weekday - first + 7) % 7) + (nth - 1) * 7;
+    }
+
+    function holidayFor(d) {
+      var y = d.getFullYear();
+      var today = new Date(y, d.getMonth(), d.getDate()).getTime();
+
+      for (var i = 0; i < HOLIDAYS.length; i++) {
+        var h = HOLIDAYS[i];
+        /* Two anchors: this year's and next year's. A window that ends on
+           January 1 opens in the December before it, so in late December
+           the date that matters belongs to the year we are not in yet.
+           Date() rolls a negative day back into the previous month. */
+        for (var k = 0; k <= 1; k++) {
+          var day = h.nth ? nthWeekday(y + k, h.month, h.weekday, h.nth) : h.day;
+          var start = new Date(y + k, h.month, day - (h.span - 1)).getTime();
+          var end = new Date(y + k, h.month, day).getTime();
+          if (today >= start && today <= end) return h.name;
+        }
+      }
+      return null;
+    }
+
+    function seasonFor(d) {
+      var m = d.getMonth(), day = d.getDate();
+      if (m === 11 || m === 0 || m === 1) return 'winter';
+      if (m <= 4) return 'spring';
+      if (m <= 7) return 'summer';
+      return 'fall';
+    }
+
+    function resolve(d) { return holidayFor(d) || seasonFor(d); }
+
+    /* ---------- spawners ---------- */
+    function faller(kind, above, extra) {
+      var p = {
+        kind: kind, re: kind,
+        x: rand(0, W), y: above ? rand(-46, -8) : rand(0, Math.max(1, floorY)),
+        vy: rand(0.16, 0.42),
+        amp: rand(3, 11), phase: rand(0, 6.28), ps: rand(0.04, 0.1),
+        f: (Math.random() * 4) | 0, ft: 0, every: 2 + ((Math.random() * 3) | 0),
+        set: 0
+      };
+      if (extra) Object.keys(extra).forEach(function (k) { p[k] = extra[k]; });
+      return p;
+    }
+
+    var SPAWN = {
+      leaf: function (a) { return faller('leaf', a, { set: (Math.random() * LEAF.length) | 0 }); },
+      /* A third of them rise. Everything else on this page falls, which is
+         the one thing Valentine's should not do. */
+      heart: function (a) {
+        var p = faller('heart', a, {
+          set: (Math.random() * HEART.length) | 0,
+          vy: rand(0.12, 0.3), amp: rand(5, 14),
+          off: (Math.random() * BEAT.length) | 0
+        });
+        if (Math.random() < 0.34) {
+          p.up = true;
+          p.vy = -rand(0.1, 0.22);
+          p.y = floorY - rand(0, 14);
+        }
+        return p;
+      },
+      confetti: function (a) {
+        return faller('confetti', a, {
+          vy: rand(0.22, 0.5), amp: rand(4, 12),
+          every: 1 + ((Math.random() * 2) | 0),
+          col: CONFETTI[(Math.random() * CONFETTI.length) | 0]
+        });
+      },
+      santa: function () {
+        var dir = Math.random() < 0.5 ? 1 : -1;
+        return {
+          kind: 'santa', dir: dir,
+          x: dir > 0 ? -44 : W + 6,
+          y: rand(H * 0.06, Math.max(H * 0.12, H * 0.26)),
+          vx: dir * rand(0.8, 1.2),
+          phase: rand(0, 6.28),
+          wait: 90 + ((Math.random() * 260) | 0)
+        };
+      },
+      petal: function (a) { return faller('petal', a, { set: (Math.random() * 3) | 0 }); },
+      fluff: function (a) {
+        return faller('fluff', a, { set: 3, vy: rand(0.06, 0.18), amp: rand(8, 20) });
+      },
+      snow: function (a) {
+        var r = Math.random();
+        return {
+          kind: 'snow', re: 'snow',
+          size: r < 0.14 ? 3 : (r < 0.5 ? 2 : 1),
+          x: rand(0, W), y: a ? rand(-20, -2) : rand(0, Math.max(1, floorY)),
+          vy: rand(0.12, 0.5), drift: rand(-0.14, 0.14), phase: rand(0, 6.28), amp: 0
+        };
+      },
+      /* A ghost crosses the whole page once, fading in and out at the edges,
+         so it is never seen to pop in. ~40 seconds end to end. */
+      ghost: function (recycle) {
+        var dir = Math.random() < 0.5 ? 1 : -1;
+        return {
+          kind: 'ghost', dir: dir,
+          /* On first load they are already partway across: nobody should
+             have to wait 40 seconds for the page to have a ghost in it. */
+          x: recycle ? (dir > 0 ? -14 : W + 4) : rand(-10, W - 6),
+          y: rand(H * 0.12, Math.max(H * 0.24, floorY * 0.62)),
+          vx: dir * rand(0.35, 0.6),
+          phase: rand(0, 6.28), f: 0, ft: 0
+        };
+      },
+      bee: function () { return wanderer('bee'); },
+      /* A ground animal, so it keeps its own x and leaves y to the floor. */
+      turkey: function () {
+        return {
+          kind: 'turkey',
+          x: rand(6, Math.max(12, W - 18)),
+          dir: Math.random() < 0.5 ? 1 : -1,
+          mode: 0,
+          hold: 20 + ((Math.random() * 70) | 0),
+          f: 0, ft: 0, amp: 0, phase: 0
+        };
+      },
+      fly: function () { return wanderer('fly'); },
+      bat: function () { return wanderer('bat'); }
+    };
+
+    function wanderer(kind) {
+      return {
+        kind: kind,
+        x: rand(0, W), y: rand(H * 0.1, Math.max(H * 0.2, floorY * 0.9)),
+        vx: rand(-0.5, 0.5), vy: rand(-0.2, 0.2),
+        tx: rand(0, W), ty: rand(H * 0.08, Math.max(H * 0.2, floorY * 0.85)),
+        hold: 0, f: 0, amp: 0,
+        phase: rand(0, 6.28),
+        period: kind === 'fly' ? rand(14, 34) : 0
+      };
+    }
+
+    function spawnRocket() {
+      return {
+        kind: 'rocket', x: rand(W * 0.08, W * 0.92), y: floorY || H,
+        vy: -rand(1.5, 2.6), peak: rand(H * 0.08, H * 0.46),
+        shell: SHELL[(Math.random() * SHELL.length) | 0]
+      };
+    }
+
+    /* Two shapes: a fast peony, and a slower willow that hangs and drips. */
+    function burst(x, y, shell) {
+      var willow = Math.random() < 0.3;
+      var n = (willow ? 22 : 26) + ((Math.random() * 10) | 0);
+      for (var i = 0; i < n; i++) {
+        var a = (i / n) * 6.283 + rand(-0.14, 0.14);
+        var sp = willow ? rand(0.3, 0.85) : rand(0.5, 1.75);
+        var life = willow ? 26 + ((Math.random() * 16) | 0) : 14 + ((Math.random() * 12) | 0);
+        parts.push({
+          kind: 'spark', x: x, y: y,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          life: life, max: life,
+          grav: willow ? 0.028 : 0.05,
+          col: Math.random() < 0.35 ? shell[1] : shell[0]
+        });
+      }
+    }
+
+    function buildLights() {
+      lights = [];
+      if (!conf().lights || CFG.count <= 0) return;
+      var swag = 62, sag = 13, top = 4;
+      var n = Math.ceil(W / swag) + 1, i = 0;
+      for (var s = 0; s < n; s++) {
+        for (var b = 1; b <= 3; b++) {
+          var t = b / 4;
+          var x = s * swag + t * swag;
+          if (x > W + 4) continue;
+          lights.push({
+            x: Math.round(x),
+            y: Math.round(top + Math.sin(t * Math.PI) * sag),
+            bulb: BULBS[i % BULBS.length],
+            period: 14 + ((Math.random() * 16) | 0),
+            offset: (Math.random() * 30) | 0
+          });
+          i++;
+        }
+      }
+      lights.sag = sag;
+      lights.swag = swag;
+      lights.top = top;
+    }
+
+    function populate() {
+      parts = [];
+      var air = conf().air || {};
+      Object.keys(air).forEach(function (kind) {
+        var fn = SPAWN[kind];
+        if (!fn) return;
+        var wandering = kind === 'bee' || kind === 'fly' || kind === 'bat' || kind === 'turkey';
+        var n = Math.round(air[kind] * CFG.count);
+        if (wandering && CFG.count > 0) n = Math.max(1, n);
+        for (var i = 0; i < n; i++) parts.push(fn(false));
+      });
+      if (conf().santa && CFG.count > 0) parts.push(SPAWN.santa());
+      buildLights();
+      nextRocket = 24;
+    }
+
+    function resize() {
+      W = Math.max(1, Math.ceil(window.innerWidth / CFG.px));
+      H = Math.max(1, Math.ceil(window.innerHeight / CFG.px));
+      canvas.width = W;
+      canvas.height = H;
+      ctx.imageSmoothingEnabled = false;
+      measureFloor();
+      measureHead();
+      populate();
+      draw();
+    }
+
+    /* The ground strip is a DOM element; read where it actually sits so
+       sprites settle onto it instead of at some guessed fraction. */
+    /* How much empty sky sits above the wordmark right now. */
+    function measureHead() {
+      headroom = 0;
+      try {
+        var logo = document.querySelector('.logo');
+        if (logo) headroom = logo.getBoundingClientRect().top / CFG.px;
+      } catch (e) {}
+    }
+
+    function measureFloor() {
+      var top = H * 0.88;
+      try {
+        var r = ground.getBoundingClientRect();
+        if (r.height > 0 || r.top > 0) top = r.top / CFG.px;
+      } catch (e) {}
+      floorY = Math.max(20, Math.min(H, Math.round(top)));
+    }
+
+    function steer(p, k, max) {
+      if (--p.hold <= 0) {
+        p.tx = rand(10, W - 10);
+        p.ty = rand(H * 0.08, Math.max(H * 0.2, floorY * 0.85));
+        p.hold = 28 + ((Math.random() * 40) | 0);
+      }
+      var dx = p.tx - p.x, dy = p.ty - p.y;
+      var d = Math.sqrt(dx * dx + dy * dy) || 1;
+      p.vx += (dx / d) * k;
+      p.vy += (dy / d) * k;
+      p.vx *= 0.9;
+      p.vy *= 0.9;
+      var sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      if (sp > max) { p.vx *= max / sp; p.vy *= max / sp; }
+      p.x += p.vx * CFG.speed;
+      p.y += p.vy * CFG.speed;
+    }
+
+    function update() {
+      tick++;
+
+      if (conf().fireworks && CFG.count > 0) {
+        nextRocket -= CFG.speed;
+        if (nextRocket <= 0) {
+          /* Mostly singles, with the odd salvo, the way a real show paces. */
+          var salvo = Math.random() < 0.3 ? 2 + ((Math.random() * 2) | 0) : 1;
+          for (var r = 0; r < salvo; r++) parts.push(spawnRocket());
+          nextRocket = (11 + Math.random() * 20) / Math.max(0.3, CFG.count);
+        }
+      }
+
+      for (var i = parts.length - 1; i >= 0; i--) {
+        var p = parts[i];
+
+        if (p.kind === 'snow') {
+          p.y += p.vy * CFG.speed;
+          p.x += (p.drift + Math.sin(p.y * 0.06 + p.phase) * 0.22) * CFG.speed;
+          if (p.x < -6) p.x = W + 4;
+          if (p.x > W + 6) p.x = -4;
+          if (p.y > floorY + 6) parts[i] = SPAWN.snow(true);
+        } else if (p.kind === 'leaf' || p.kind === 'petal' || p.kind === 'fluff' ||
+                   p.kind === 'heart' || p.kind === 'confetti') {
+          p.y += p.vy * CFG.speed;
+          p.phase += p.ps * CFG.speed;
+          if (++p.ft >= p.every) { p.ft = 0; p.f = (p.f + 1) % 4; }
+          if (p.up ? p.y < -14 : p.y > floorY + 10) parts[i] = SPAWN[p.re](true);
+        } else if (p.kind === 'bee') {
+          steer(p, 0.07, 0.9);
+          p.y += Math.sin(tick * 0.5 + p.phase) * 0.12;
+          p.f ^= 1;
+        } else if (p.kind === 'ghost') {
+          p.x += p.vx * CFG.speed;
+          p.phase += 0.09 * CFG.speed;
+          p.y += Math.sin(p.phase) * 0.3 * CFG.speed;
+          if (++p.ft >= 3) { p.ft = 0; p.f ^= 1; }
+          if (p.dir > 0 ? p.x > W + 8 : p.x < -18) parts[i] = SPAWN.ghost(true);
+        } else if (p.kind === 'santa') {
+          /* Long gaps between passes: a thing you catch, not a loop. */
+          if (p.wait > 0) {
+            p.wait -= CFG.speed;
+          } else {
+            p.x += p.vx * CFG.speed;
+            p.phase += 0.05 * CFG.speed;
+            p.y += Math.sin(p.phase) * 0.18 * CFG.speed;
+            if (p.dir > 0 ? p.x > W + 8 : p.x < -46) {
+              var again = SPAWN.santa();
+              again.wait = 900 + ((Math.random() * 700) | 0);
+              parts[i] = again;
+            }
+          }
+        } else if (p.kind === 'turkey') {
+          /* Walk a while, stop a while. Half the stops are a peck, and a
+             turn only ever happens on the way out of one. */
+          if (--p.hold <= 0) {
+            p.mode = p.mode === 0 ? (Math.random() < 0.55 ? 2 : 1) : 0;
+            if (p.mode === 0) {
+              p.hold = 50 + ((Math.random() * 110) | 0);
+              if (Math.random() < 0.45) p.dir = -p.dir;
+            } else {
+              p.hold = 20 + ((Math.random() * 45) | 0);
+            }
+          }
+          if (p.mode === 0) {
+            p.x += p.dir * 0.22 * CFG.speed;
+            if (p.x < 2) { p.x = 2; p.dir = 1; }
+            if (p.x > W - 15) { p.x = W - 15; p.dir = -1; }
+            if (++p.ft >= 4) { p.ft = 0; p.f ^= 1; }
+          }
+        } else if (p.kind === 'bat') {
+          steer(p, 0.05, 0.75);
+          p.f ^= 1;
+        } else if (p.kind === 'fly') {
+          steer(p, 0.03, 0.45);
+          p.phase += (6.28 / p.period) * CFG.speed;
+        } else if (p.kind === 'rocket') {
+          p.y += p.vy * CFG.speed;
+          if (p.y <= p.peak) {
+            burst(p.x, p.y, p.shell);
+            parts.splice(i, 1);
+          }
+        } else if (p.kind === 'spark') {
+          p.vy += (p.grav || 0.05) * CFG.speed;
+          p.x += p.vx * CFG.speed;
+          p.y += p.vy * CFG.speed;
+          p.life -= CFG.speed;
+          if (p.life <= 0) parts.splice(i, 1);
+        }
+      }
+    }
+
+    /* Fade anything in the last stretch so it settles into the ground line
+       instead of being clipped by it. */
+    function alphaAt(y, base) {
+      var a = base * CFG.alpha;
+      var fade = 20;
+      if (y > floorY - fade) a *= Math.max(0, 1 - (y - (floorY - fade)) / (fade + 6));
+      return Math.max(0, Math.min(1, a));
+    }
+
+    function blit(img, x, y, flip) {
+      x = Math.round(x);
+      y = Math.round(y);
+      if (flip) {
+        ctx.save();
+        ctx.translate(x + img.width, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img, x, y);
+      }
+    }
+
+    function drawLights() {
+      if (!lights.length) return;
+      ctx.globalAlpha = CFG.alpha;
+      ctx.fillStyle = P('wire');
+      for (var x = 0; x <= W; x++) {
+        var t = (x % lights.swag) / lights.swag;
+        ctx.fillRect(x, Math.round(lights.top + Math.sin(t * Math.PI) * lights.sag), 1, 1);
+      }
+      for (var i = 0; i < lights.length; i++) {
+        var L = lights[i];
+        var per = Math.max(3, L.period / CFG.blink);
+        var on = reduce ? true : ((tick + L.offset) % per) < per * 0.68;
+        blit(on ? L.bulb.on : L.bulb.off, L.x - 1, L.y + 1, false);
+      }
+    }
+
+    /* Fixtures stand on the ground line, clipped just into the soil so the
+       groundhog can rise out of it. */
+    /* Anything standing on the ground line. One name, or a list of them
+       with their own positions, so a scene can plant a whole row. */
+    var FIXTURE_X = { pumpkin: 0.21, hog: 0.7 };
+
+    function fixtures() {
+      var f = conf().fixture;
+      if (!f) return [];
+      return typeof f === 'string' ? [{ kind: f }] : f;
+    }
+
+    function drawFixture() {
+      var list = fixtures();
+      if (!list.length || CFG.count <= 0) return;
+      var baseline = floorY + 3;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, baseline);
+      ctx.clip();
+      ctx.globalAlpha = 1;
+
+      for (var fi = 0; fi < list.length; fi++) {
+        drawOne(list[fi], baseline);
+      }
+      ctx.restore();
+    }
+
+    function drawOne(item, baseline) {
+      var f = item.kind;
+      var fx = typeof item.x === 'number' ? item.x : (FIXTURE_X[f] || 0.5);
+
+      if (f === 'flower') {
+        var bank = FLOWER[item.type] || FLOWER.tulip;
+        var pair = bank[item.set % bank.length];
+        var img = pair[reduce ? 0 : (Math.sin(tick * 0.07 + (item.off || 0)) > 0 ? 1 : 0)];
+        blit(img, Math.round(W * fx), baseline - img.height, false);
+      } else if (f === 'pumpkin') {
+        var img = PUMPKIN[reduce ? 0 : (Math.abs((Math.sin(tick * 0.7) + Math.sin(tick * 0.31)) * 1.6) | 0) % 3];
+        blit(img, Math.round(W * fx), baseline - img.height, false);
+      } else if (f === 'hog') {
+        /* 14s cycle: buried, rising, up, sees it, ducks. */
+        var T = reduce ? 90 : tick % 170;
+        var up = 0;
+        if (T < 48) up = 0;
+        else if (T < 60) up = (T - 48) / 12;
+        else if (T < 110) up = 1;
+        else if (T < 122) up = 1 - (T - 110) / 12;
+
+        var hx = Math.round(W * fx);
+
+        if (up > 0) {
+          blit(HOG, hx, baseline - Math.round(HOG.height * up), false);
+        }
+
+        /* The shadow he came out to look for, and the reason he goes back. */
+        if (up >= 1 && T >= 78) {
+          ctx.globalAlpha = Math.min(1, (T - 78) / 10);
+          blit(SHADOW, hx + HOG.width + 2, baseline - SHADOW.height, false);
+          ctx.globalAlpha = 1;
+        }
+
+        blit(MOUND, hx + Math.round((HOG.width - MOUND.width) / 2), baseline - MOUND.height, false);
+      }
+    }
+
+    /* The web hangs in the top-left corner: the only corner the page leaves
+       empty (the toggle owns top-right, the panel bottom-left). */
+    function drawWeb() {
+      if (!conf().web || CFG.count <= 0) return;
+
+      ctx.globalAlpha = Math.min(1, CFG.alpha);
+      blit(WEB, 0, 0, false);
+
+      /* 20s cycle: sat in the web, lowering, hanging, climbing back. */
+      var T = reduce ? 90 : tick % 250;
+      var drop = 0;
+      if (T < 44) drop = 0;
+      else if (T < 80) drop = (T - 44) / 36;
+      else if (T < 180) drop = 1;
+      else if (T < 216) drop = 1 - (T - 180) / 36;
+
+      var anchor = 20;
+      var base = 24;
+      var len = Math.round(drop * 30);
+      var dx = len > 0 ? Math.sin(tick * 0.11) * 2.2 * CFG.sway : 0;
+
+      ctx.fillStyle = P('web');
+      for (var i = 0; i < len; i++) {
+        ctx.fillRect(anchor + Math.round(dx * (i / len)), base + i, 1, 1);
+      }
+
+      var img = SPIDER[reduce ? 0 : (tick >> 1) & 1];
+      blit(img, anchor + Math.round(dx) - 4, base + len, false);
+      ctx.globalAlpha = 1;
+    }
+
+    /* The line reads out near the top of the sky, well clear of the
+       wordmark, and only now and then: a thing that happens, not a
+       heading the page has grown. */
+    function drawBanner() {
+      if (!conf().banner || !BANNER || CFG.count <= 0) return;
+
+      var env = 1;
+      if (!reduce) {
+        var T = tick % 230;
+        if (T < 26) env = T / 26;
+        else if (T < 130) env = 1;
+        else if (T < 160) env = 1 - (T - 130) / 30;
+        else env = 0;
+      }
+      if (env <= 0) return;
+
+      /* It lives in the gap above the wordmark, and only if the gap is
+         really there: scrolled down, or on a screen too short to hold it,
+         the line simply does not run and the fireworks carry the night. */
+      if (headroom < BANNER.height + 4) return;
+      /* And only if it clears the toggle in the corner. On a narrow phone
+         it does not, and the night is fireworks alone. */
+      if (BANNER.width > W - 40) return;
+
+      ctx.globalAlpha = Math.min(1, env * CFG.alpha);
+      var y = Math.max(3, Math.round((headroom - BANNER.height) / 2));
+      blit(BANNER, Math.round((W - BANNER.width) / 2), y, false);
+      ctx.globalAlpha = 1;
+    }
+
+    /* Heat coming off the ground: a sparse band of dashes that travels
+       along the horizon rather than flickering in place. */
+    function drawShimmer() {
+      if (!conf().shimmer || CFG.count <= 0) return;
+
+      ctx.fillStyle = P('shimmer');
+      ctx.globalAlpha = Math.min(1, CFG.alpha * 0.85);
+      for (var x = 0; x < W; x += 2) {
+        if (Math.sin(x * 0.21 + tick * 0.16) < 0.4) continue;
+        var y = floorY - 4 - Math.round(Math.sin(x * 0.1 + tick * 0.1) * 1.6);
+        ctx.fillRect(x, y, 2, 1);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      if (!ON || CFG.count <= 0) return;
+
+      drawShimmer();
+      drawLights();
+      drawWeb();
+      drawBanner();
+
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        var sx = p.x + Math.sin(p.phase) * (p.amp || 0) * CFG.sway;
+
+        if (p.kind === 'leaf') {
+          ctx.globalAlpha = alphaAt(p.y, 0.95);
+          blit(LEAF[p.set][TUMBLE[p.f]], sx, p.y, false);
+        } else if (p.kind === 'heart') {
+          ctx.globalAlpha = alphaAt(p.y, 0.9);
+          blit(HEART[p.set][reduce ? 1 : BEAT[(tick + p.off) % BEAT.length]], sx, p.y, false);
+        } else if (p.kind === 'confetti') {
+          /* Two pixels wide, then two tall: a scrap turning over. */
+          ctx.globalAlpha = alphaAt(p.y, 0.95);
+          ctx.fillStyle = p.col;
+          var turned = p.f % 2 === 1;
+          ctx.fillRect(Math.round(sx), Math.round(p.y), turned ? 1 : 2, turned ? 2 : 1);
+        } else if (p.kind === 'santa') {
+          if (p.wait > 0) continue;
+          var sspan = W + 50;
+          var sprog = (p.dir > 0 ? p.x + 44 : W + 6 - p.x) / sspan;
+          var senv = Math.max(0, Math.min(1, Math.min(sprog, 1 - sprog) / 0.14));
+          ctx.globalAlpha = senv * CFG.alpha;
+          blit(SANTA, p.x, p.y, p.dir < 0);
+        } else if (p.kind === 'petal' || p.kind === 'fluff') {
+          ctx.globalAlpha = alphaAt(p.y, p.kind === 'fluff' ? 0.8 : 0.85);
+          blit(PETAL[p.set][p.f % 2], sx, p.y, false);
+        } else if (p.kind === 'snow') {
+          ctx.globalAlpha = alphaAt(p.y, p.size === 1 ? 0.62 : 0.92);
+          if (p.size === 3) {
+            blit(STAR, p.x, p.y, false);
+          } else {
+            ctx.fillStyle = p.size === 2 ? P('snow') : P('snowDim');
+            ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+          }
+        } else if (p.kind === 'bee') {
+          ctx.globalAlpha = CFG.alpha;
+          blit(BEE[p.f], p.x, p.y, p.vx < 0);
+        } else if (p.kind === 'ghost') {
+          /* Fade across the first and last sixth of the crossing. */
+          var span = W + 22;
+          var prog = (p.dir > 0 ? p.x + 14 : W + 4 - p.x) / span;
+          var env = Math.max(0, Math.min(1, Math.min(prog, 1 - prog) / 0.16));
+          ctx.globalAlpha = env * CFG.alpha * 0.9;
+          blit(GHOST[p.f], p.x, p.y, false);
+        } else if (p.kind === 'turkey') {
+          /* Solid, like everything else standing on the ground line. */
+          var timg = TURKEY[p.mode === 2 ? 2 : p.f];
+          ctx.globalAlpha = 1;
+          blit(timg, p.x, floorY + 3 - timg.height, p.dir < 0);
+        } else if (p.kind === 'fly') {
+          /* Cubed sine: mostly dark with a short bright flash. */
+          var g = Math.pow((Math.sin(p.phase) + 1) / 2, 3);
+          ctx.globalAlpha = Math.min(1, g * CFG.alpha);
+          if (g > 0.5) {
+            blit(FLY, p.x - 1, p.y - 1, false);
+          } else {
+            ctx.fillStyle = P('flyCore');
+            ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+          }
+        } else if (p.kind === 'rocket') {
+          ctx.globalAlpha = CFG.alpha;
+          ctx.fillStyle = p.shell[1];
+          ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 2);
+          ctx.globalAlpha = Math.min(1, CFG.alpha * 0.4);
+          ctx.fillRect(Math.round(p.x), Math.round(p.y) + 2, 1, 3);
+        } else if (p.kind === 'spark') {
+          ctx.globalAlpha = Math.min(1, (p.life / p.max) * CFG.alpha);
+          ctx.fillStyle = p.col;
+          ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+        }
+      }
+
+      ctx.globalAlpha = 1;
+      drawFixture();
+    }
+
+    function loop(now) {
+      raf = window.requestAnimationFrame(loop);
+      if (now - last < 1000 / CFG.fps) return;
+      last = now;
+      update();
+      draw();
+    }
+
+    function start() {
+      if (raf || reduce || !ON || CFG.count <= 0 || document.hidden) return;
+      last = 0;
+      raf = window.requestAnimationFrame(loop);
+    }
+
+    function stop() { if (raf) { window.cancelAnimationFrame(raf); raf = 0; } }
+
+    function setGround() {
+      var name = 'tile' + conf().ground;
+      var rows = ON && CFG.ground ? ART[name] : null;
+      if (!rows) {
+        ground.style.backgroundImage = 'none';
+        ground.style.height = '0px';
+        return;
+      }
+      var c = bake(rows, tileKey(name));
+      ground.style.backgroundImage = 'url(' + c.toDataURL() + ')';
+      ground.style.backgroundSize = (c.width * CFG.px) + 'px ' + (c.height * CFG.px) + 'px';
+      ground.style.height = (c.height * CFG.px) + 'px';
+    }
+
+    function applyAll() {
+      setGround();
+      resize();
+      stop();
+      start();
+      if (reduce) draw();
+    }
+
+    /* ---------- the word ---------- */
+    function setMagic(on) {
+      ON = !!on;
+      document.documentElement.classList.toggle('magic', ON);
+      applyAll();
+      try { window.localStorage.setItem(MAGIC_KEY, ON ? '1' : '0'); } catch (e) {}
+    }
+
+    var typed = '';
+    document.addEventListener('keydown', function (ev) {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      var t = ev.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      var k = (ev.key || '').toLowerCase();
+      if (k.length !== 1 || k < 'a' || k > 'z') return;
+      typed = (typed + k).slice(-MAGIC_WORD.length);
+      if (typed === MAGIC_WORD) {
+        typed = '';
+        setMagic(!ON);
+      }
+    });
+
+    function onTheme() {
+      var next = currentTheme();
+      if (next === THEME) return;
+      THEME = next;
+      rebake();
+      setGround();
+      draw();
+    }
+
+    /* A phone has no keyboard to type into, so the Ohio becomes the way in.
+       The button exists only where the primary pointer is a finger, and is
+       built here rather than in the markup so a desktop visitor gets a plain
+       graphic: nothing to tab to, nothing to click. The change listener
+       matters more than it looks — attaching or detaching an iPad keyboard
+       flips this mid-visit, and without it a visitor is left with neither
+       route in. */
+    var coarse = window.matchMedia('(hover: none) and (pointer: coarse)');
+    var ohio = document.querySelector('.ohio');
+    var ohioBtn = null;
+
+    function wireOhio() {
+      if (!ohio) return;
+
+      if (coarse.matches && !ohioBtn) {
+        ohioBtn = document.createElement('button');
+        ohioBtn.type = 'button';
+        ohioBtn.className = 'ohio-btn';
+        ohioBtn.setAttribute('aria-label', 'Made in Ohio');
+        ohio.parentNode.insertBefore(ohioBtn, ohio);
+        ohioBtn.appendChild(ohio);
+        ohioBtn.addEventListener('click', function () { setMagic(!ON); });
+      } else if (!coarse.matches && ohioBtn) {
+        ohioBtn.parentNode.insertBefore(ohio, ohioBtn);
+        ohioBtn.parentNode.removeChild(ohioBtn);
+        ohioBtn = null;
+      }
+    }
+
+    wireOhio();
+    if (coarse.addEventListener) coarse.addEventListener('change', wireOhio);
+    else if (coarse.addListener) coarse.addListener(wireOhio);
+
+    /* index.html owns the toggle. Watch the attribute it sets, and the OS
+       setting, so the sprite palettes follow the theme either way. */
+    if (window.MutationObserver) {
+      new MutationObserver(onTheme).observe(document.documentElement, {
+        attributes: true, attributeFilter: ['data-theme']
+      });
+    }
+    if (mql.addEventListener) mql.addEventListener('change', onTheme);
+    else if (mql.addListener) mql.addListener(onTheme);
+
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stop(); else start();
+    });
+
+    /* While the ground is pinned, the floor sits a fixed distance from the
+       bottom of the screen; as it releases, it moves. Re-measure on scroll
+       so sprites always land on the line that is actually drawn. */
+    var sTick = 0;
+    window.addEventListener('scroll', function () {
+      if (sTick || !ON) return;
+      sTick = window.requestAnimationFrame(function () {
+        sTick = 0;
+        measureFloor();
+        measureHead();
+        /* Repaint on this frame. The simulation stays at 12fps; this only
+           re-renders what is already there against the floor's new place,
+           so anything standing on the ground line stays on it mid-scroll
+           instead of floating up to 60 pixels off it. */
+        draw();
+      });
+    }, false);
+
+    var rt;
+    window.addEventListener('resize', function () {
+      window.clearTimeout(rt);
+      rt = window.setTimeout(function () { setGround(); resize(); }, 150);
+    });
+
+    rebake();
+    scene = CFG.season === 'auto' ? resolve(new Date()) : CFG.season;
+    if (!SCENES[scene]) { CFG.season = 'auto'; scene = resolve(new Date()); }
+
+    /* Once found, it stays found. */
+    var remembered = false;
+    try { remembered = window.localStorage.getItem(MAGIC_KEY) === '1'; } catch (e) {}
+    setMagic(FORCED || remembered);
+  })();
   </script>
 </body>
 </html>
