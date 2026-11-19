@@ -700,53 +700,49 @@
         '...S...', '...S...', '.LLS...', '...S...', '...SLL.', '...S...'
       ],
 
-      /* Walks, stops, pecks. Two failed attempts are worth recording: the
-         fan stacked square on the body read as a lump on its back, and
-         striping it in the body's own two colours left it a rectangle with
-         no shape. A fan has to taper to a point where it meets the bird,
-         spread wider than the body, and carry a dark line between every
-         feather — that gap is what turns a block into feathers. */
+      /* Walks, stops, pecks. The fan hangs off the BACK of the bird, not
+         the top of it: its hinge is level with the body, so most of its
+         mass is behind the turkey and only its upper feathers rise over
+         the back. Centred above the body it read as a diamond balanced on
+         a bird, which is what the first three attempts all did. */
       turkey0: [
-        '..F.F.F......',
-        '.FDFDFDF.....',
-        'FDFDFDFDF....',
-        '.FDFDFDF.....',
-        '..FDFDF...KK.',
-        '...FDF...KKKK',
-        '....D....KK..',
-        '...BBBBBBK...',
-        '..BBBBBBBB...',
-        '..BBBBBBB....',
-        '...L..L......',
-        '..LL..LL.....'
+        '...F..F.......',
+        '.F.FD.F.......',
+        'F.FDFDF.......',
+        '.FDFDFDF......',
+        'FDFDFDFD...KK.',
+        '.FDFDFDB..KKKK',
+        'FDFDFDBBBBKK..',
+        '.FDFDBBBBBK...',
+        '..FDBBBBBB....',
+        '....L..L......',
+        '...LL..LL.....'
       ],
       turkey1: [
-        '..F.F.F......',
-        '.FDFDFDF.....',
-        'FDFDFDFDF....',
-        '.FDFDFDF.....',
-        '..FDFDF...KK.',
-        '...FDF...KKKK',
-        '....D....KK..',
-        '...BBBBBBK...',
-        '..BBBBBBBB...',
-        '..BBBBBBB....',
-        '....L..L.....',
-        '...LL..LL....'
+        '...F..F.......',
+        '.F.FD.F.......',
+        'F.FDFDF.......',
+        '.FDFDFDF......',
+        'FDFDFDFD...KK.',
+        '.FDFDFDB..KKKK',
+        'FDFDFDBBBBKK..',
+        '.FDFDBBBBBK...',
+        '..FDBBBBBB....',
+        '.....L..L.....',
+        '....LL..LL....'
       ],
       turkey2: [
-        '..F.F.F......',
-        '.FDFDFDF.....',
-        'FDFDFDFDF....',
-        '.FDFDFDF.....',
-        '..FDFDF......',
-        '...FDF.......',
-        '....D........',
-        '...BBBBBB....',
-        '..BBBBBBBBK..',
-        '..BBBBBBB.KKK',
-        '...L..L....K.',
-        '..LL..LL.....'
+        '...F..F.......',
+        '.F.FD.F.......',
+        'F.FDFDF.......',
+        '.FDFDFDF......',
+        'FDFDFDFD......',
+        '.FDFDFDB......',
+        'FDFDFDBBBB....',
+        '.FDFDBBBBBK...',
+        '..FDBBBBBB.KKK',
+        '....L..L...K..',
+        '...LL..LL.....'
       ],
 
       /* The burrow, drawn in front of him: he rises from behind the mound
@@ -1455,7 +1451,7 @@
           if (p.mode === 0) {
             p.x += p.dir * 0.22 * CFG.speed;
             if (p.x < 2) { p.x = 2; p.dir = 1; }
-            if (p.x > W - 13) { p.x = W - 13; p.dir = -1; }
+            if (p.x > W - 15) { p.x = W - 15; p.dir = -1; }
             if (++p.ft >= 4) { p.ft = 0; p.f ^= 1; }
           }
         } else if (p.kind === 'bat') {
