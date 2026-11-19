@@ -534,7 +534,7 @@
           { T: '#C98A14', P: '#D9A72E', C: '#9A6A0E', S: '#3F7A3A', L: '#4E8F45' },
           { T: '#9A5AAE', P: '#B37EC2', C: '#C9A014', S: '#3F7A3A', L: '#4E8F45' }
         ],
-        turkey: { B: '#4A3524', F: '#8A6A42', K: '#B0453A', L: '#C98A2E' },
+        turkey: { B: '#4A3524', F: '#A98258', D: '#2A1D12', K: '#B0453A', L: '#C98A2E' },
         shimmer: '#B8905A',
         santa: { K: '#2A2622', R: '#C0392B' },
         ghost: { G: '#8798A4', E: '#39424A' },
@@ -592,7 +592,7 @@
           { T: '#E8A62E', P: '#F2C24A', C: '#C98A14', S: '#5FA855', L: '#72BF66' },
           { T: '#BE7AD2', P: '#D2A0E0', C: '#F2C21E', S: '#5FA855', L: '#72BF66' }
         ],
-        turkey: { B: '#8A6A48', F: '#C9A270', K: '#D9564A', L: '#E0A842' },
+        turkey: { B: '#8A6A48', F: '#D4B088', D: '#4A3524', K: '#D9564A', L: '#E0A842' },
         shimmer: '#8A7044',
         santa: { K: '#C8C3B8', R: '#E0564A' },
         ghost: { G: '#D8E4EC', E: '#14181C' },
@@ -700,43 +700,48 @@
         '...S...', '...S...', '.LLS...', '...S...', '...SLL.', '...S...'
       ],
 
-      /* Walks, stops, pecks. The first pass stacked the fan straight on
-         top of the body, which read as a lump on its back; the tail now
-         rises behind the bird and the neck lifts in front of it, so the
-         silhouette has the two curves a turkey actually has. */
+      /* Walks, stops, pecks. Two failed attempts are worth recording: the
+         fan stacked square on the body read as a lump on its back, and
+         striping it in the body's own two colours left it a rectangle with
+         no shape. A fan has to taper to a point where it meets the bird,
+         spread wider than the body, and carry a dark line between every
+         feather — that gap is what turns a block into feathers. */
       turkey0: [
-        '.F.F.F.......',
-        'FBFBFBF......',
-        'FBFBFBF...KK.',
-        'FBFBFBF..KKKK',
-        '.FBFBF...KK..',
-        '..FFF...KK...',
-        '...BBBBBB....',
+        '..F.F.F......',
+        '.FDFDFDF.....',
+        'FDFDFDFDF....',
+        '.FDFDFDF.....',
+        '..FDFDF...KK.',
+        '...FDF...KKKK',
+        '....D....KK..',
+        '...BBBBBBK...',
         '..BBBBBBBB...',
         '..BBBBBBB....',
         '...L..L......',
         '..LL..LL.....'
       ],
       turkey1: [
-        '.F.F.F.......',
-        'FBFBFBF......',
-        'FBFBFBF...KK.',
-        'FBFBFBF..KKKK',
-        '.FBFBF...KK..',
-        '..FFF...KK...',
-        '...BBBBBB....',
+        '..F.F.F......',
+        '.FDFDFDF.....',
+        'FDFDFDFDF....',
+        '.FDFDFDF.....',
+        '..FDFDF...KK.',
+        '...FDF...KKKK',
+        '....D....KK..',
+        '...BBBBBBK...',
         '..BBBBBBBB...',
         '..BBBBBBB....',
         '....L..L.....',
         '...LL..LL....'
       ],
       turkey2: [
-        '.F.F.F.......',
-        'FBFBFBF......',
-        'FBFBFBF......',
-        'FBFBFBF......',
-        '.FBFBF.......',
-        '..FFF........',
+        '..F.F.F......',
+        '.FDFDFDF.....',
+        'FDFDFDFDF....',
+        '.FDFDFDF.....',
+        '..FDFDF......',
+        '...FDF.......',
+        '....D........',
         '...BBBBBB....',
         '..BBBBBBBBK..',
         '..BBBBBBB.KKK',
