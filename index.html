@@ -431,7 +431,19 @@
     width: 100%;
     max-width: var(--max);
     margin: 0 auto;
-    padding: 8px 16px 64px;
+    padding: 8px 16px 40px;
+  }
+
+  /* Contact closes the page now, on the same measure as Philosophy. The
+     rule above it marks the hand-off from reading to getting in touch. */
+  .contact-section {
+    flex: none;
+    width: 100%;
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 40px 16px 72px;
+    text-align: center;
+    border-top: 1px solid var(--rule);
   }
 
   .philosophy h2 {
@@ -491,7 +503,8 @@
   }
 
   @media (max-width: 480px) {
-    .philosophy { padding-bottom: 48px; }
+    .philosophy { padding-bottom: 32px; }
+    .contact-section { padding: 32px 16px 56px; }
     .tenets { gap: 24px; }
     .tenets li { grid-template-columns: 1.7em 1fr; }
     .tenets .num { font-size: 1rem; }
@@ -590,56 +603,6 @@
         An independent studio making <span class="mark">retro-inspired games</span> that people love.
         Stay tuned&hellip;
       </p>
-
-      <!-- Ships as a plain mail link. The script upgrades it into the
-           button that opens the form below, so a visitor without JS still
-           has a working way to reach us. -->
-      <a class="cta" id="contactToggle" href="mailto:hello@dyeyellowstudios.com"
-         aria-expanded="false" aria-controls="contactPanel">Get in touch</a>
-
-      <div class="contact" id="contactPanel" hidden>
-        <form class="contact-form" id="contactForm"
-              action="https://api.web3forms.com/submit" method="POST">
-          <input type="hidden" name="access_key"
-                 value="2c1096e2-3b94-4de0-9e4a-bfb9ff9e455d">
-          <input type="hidden" name="subject"
-                 value="New message from dyeyellowstudios.com">
-          <input type="hidden" name="from_name" value="Dye Yellow Studios">
-          <!-- Sends the visitor's address back as Reply-To, so a reply in
-               the mail client goes to them rather than to Web3Forms. -->
-          <input type="hidden" name="replyto" value="email">
-          <!-- Comes back to our own page rather than their thank-you screen. -->
-          <input type="hidden" name="redirect"
-                 value="https://dyeyellowstudios.com/?sent=1">
-
-          <label class="botcheck">
-            Leave this field empty
-            <input type="checkbox" name="botcheck" tabindex="-1" aria-hidden="true">
-          </label>
-
-          <div class="field">
-            <label for="cf-name">Name</label>
-            <input type="text" id="cf-name" name="name" autocomplete="name" required>
-          </div>
-
-          <div class="field">
-            <label for="cf-email">Email</label>
-            <input type="email" id="cf-email" name="email" autocomplete="email" required>
-          </div>
-
-          <div class="field">
-            <label for="cf-message">Message</label>
-            <textarea id="cf-message" name="message" rows="5" required></textarea>
-          </div>
-
-          <button class="cta" type="submit">Send message</button>
-        </form>
-
-        <p class="contact-alt" id="contactAlt">
-          Or email us straight at
-          <a href="mailto:hello@dyeyellowstudios.com">hello@dyeyellowstudios.com</a>.
-        </p>
-      </div>
     </div>
   </main>
 
@@ -677,6 +640,58 @@
         </p>
       </li>
     </ol>
+  </section>
+
+  <section class="contact-section" aria-label="Contact">
+    <!-- Ships as a plain mail link. The script upgrades it into the
+         button that opens the form below, so a visitor without JS still
+         has a working way to reach us. -->
+    <a class="cta" id="contactToggle" href="mailto:hello@dyeyellowstudios.com"
+       aria-expanded="false" aria-controls="contactPanel">Get in touch</a>
+
+    <div class="contact" id="contactPanel" hidden>
+      <form class="contact-form" id="contactForm"
+            action="https://api.web3forms.com/submit" method="POST">
+        <input type="hidden" name="access_key"
+               value="2c1096e2-3b94-4de0-9e4a-bfb9ff9e455d">
+        <input type="hidden" name="subject"
+               value="New message from dyeyellowstudios.com">
+        <input type="hidden" name="from_name" value="Dye Yellow Studios">
+        <!-- Sends the visitor's address back as Reply-To, so a reply in
+             the mail client goes to them rather than to Web3Forms. -->
+        <input type="hidden" name="replyto" value="email">
+        <!-- Comes back to our own page rather than their thank-you screen. -->
+        <input type="hidden" name="redirect"
+               value="https://dyeyellowstudios.com/?sent=1">
+
+        <label class="botcheck">
+          Leave this field empty
+          <input type="checkbox" name="botcheck" tabindex="-1" aria-hidden="true">
+        </label>
+
+        <div class="field">
+          <label for="cf-name">Name</label>
+          <input type="text" id="cf-name" name="name" autocomplete="name" required>
+        </div>
+
+        <div class="field">
+          <label for="cf-email">Email</label>
+          <input type="email" id="cf-email" name="email" autocomplete="email" required>
+        </div>
+
+        <div class="field">
+          <label for="cf-message">Message</label>
+          <textarea id="cf-message" name="message" rows="5" required></textarea>
+        </div>
+
+        <button class="cta" type="submit">Send message</button>
+      </form>
+
+      <p class="contact-alt" id="contactAlt">
+        Or email us straight at
+        <a href="mailto:hello@dyeyellowstudios.com">hello@dyeyellowstudios.com</a>.
+      </p>
+    </div>
   </section>
 
   <div class="ground" id="ground"></div>
@@ -717,6 +732,12 @@
         if (alt) alt.remove();
         panel.hidden = false;
         toggle.hidden = true;
+
+        /* We come back to the top of the page, and the confirmation sits
+           below the Philosophy section, so bring it into view. Jumps
+           rather than glides: this is the first paint after a redirect,
+           and a scroll animation from nowhere reads as a glitch. */
+        note.scrollIntoView({ block: 'center' });
 
         params.delete('sent');
         var rest = params.toString();
