@@ -307,6 +307,79 @@
 
   .ohio-btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 6px; }
 
+  /* ---- Philosophy ---- */
+  .philosophy {
+    flex: none;
+    width: 100%;
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 8px 16px 64px;
+  }
+
+  .philosophy h2 {
+    font-size: clamp(0.8rem, 2.4vw, 0.95rem);
+    line-height: 1.4;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+    margin: 0 0 32px;
+  }
+
+  .tenets {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 28px;
+  }
+
+  .tenets li {
+    display: grid;
+    grid-template-columns: 2.1em 1fr;
+    gap: 4px 14px;
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
+  }
+
+  /* The numeral borrows the tagline's highlighter rather than sitting in
+     pale yellow type, which the cream background swallows. */
+  .tenets .num {
+    grid-row: 1 / span 2;
+    align-self: start;
+    justify-self: start;
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    background: var(--yellow);
+    color: var(--on-yellow);
+    padding: 0 6px;
+    border-radius: 3px;
+  }
+
+  .tenets h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0;
+    align-self: center;
+  }
+
+  .tenets p {
+    margin: 6px 0 0;
+    color: var(--muted);
+  }
+
+  @media (max-width: 480px) {
+    .philosophy { padding-bottom: 48px; }
+    .tenets { gap: 24px; }
+    .tenets li { grid-template-columns: 1.7em 1fr; }
+    .tenets .num { font-size: 1rem; }
+  }
+
+
   /* ---- The ambient layer (off until someone types the word) ---- */
 
   #sky {
@@ -325,7 +398,7 @@
 
   /* Everything on the page sits above the framebuffer. The toggle is
      already fixed with its own z-index, so it is left alone here. */
-  main, footer { position: relative; z-index: 1; }
+  main, .philosophy, footer { position: relative; z-index: 1; }
 
   /* The ground rises rather than appearing, so the word feels like a cause. */
   .ground {
@@ -403,6 +476,42 @@
       <a class="cta" href="mailto:hello@dyeyellowstudios.com">Get in touch</a>
     </div>
   </main>
+
+  <section class="philosophy" aria-labelledby="philosophy-title">
+    <h2 id="philosophy-title">Philosophy</h2>
+
+    <ol class="tenets">
+      <li>
+        <span class="num" aria-hidden="true">01</span>
+        <h3>Maximizing fun over profit</h3>
+        <p>
+          The only thing we're trying to maximize is how much fun you have. No
+          upsells, no subscriptions, no add-ons: you buy the game, you get the
+          whole game. We break the monotony, not the bank.
+        </p>
+      </li>
+
+      <li>
+        <span class="num" aria-hidden="true">02</span>
+        <h3>Nostalgia, not a second job</h3>
+        <p>
+          Games that chase the feeling of the ones we grew up with: the sound, the
+          pixels, the pull of one more round. Pick up, play, put down. No day of
+          PTO required.
+        </p>
+      </li>
+
+      <li>
+        <span class="num" aria-hidden="true">03</span>
+        <h3>Human-led, machine-powered</h3>
+        <p>
+          Creativity and ingenuity aren't things you can automate. Every idea here
+          comes from a person. Machines are how we bring those ideas to life:
+          faster, further, more of them. No slop.
+        </p>
+      </li>
+    </ol>
+  </section>
 
   <div class="ground" id="ground"></div>
 
