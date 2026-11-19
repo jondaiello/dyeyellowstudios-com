@@ -65,6 +65,8 @@
     --mark-start: 58%;   /* partial sweep reads well on paper */
     --cta-border: #111110;
     --cta-shadow: rgba(17, 17, 16, 0.9);
+    --focus-ring: rgba(17, 17, 16, 0.18);
+    --sent-bg: rgba(247, 231, 51, 0.10);
     --max: 680px;
   }
 
@@ -82,6 +84,8 @@
       --mark-start: 8%;    /* full swipe: text on the sweep is dark */
       --cta-border: transparent;
       --cta-shadow: rgba(247, 231, 51, 0.35);
+      --focus-ring: rgba(247, 231, 51, 0.30);
+      --sent-bg: rgba(247, 231, 51, 0.07);
     }
   }
 
@@ -97,6 +101,8 @@
     --mark-start: 8%;
     --cta-border: transparent;
     --cta-shadow: rgba(247, 231, 51, 0.35);
+    --focus-ring: rgba(247, 231, 51, 0.30);
+    --sent-bg: rgba(247, 231, 51, 0.07);
   }
 
   * { box-sizing: border-box; }
@@ -183,6 +189,118 @@
   .cta:hover, .cta:focus-visible {
     transform: translateY(-2px);
     box-shadow: 0 6px 0 var(--cta-shadow);
+  }
+
+  /* .cta sets display, which would otherwise beat the hidden attribute. */
+  .cta[hidden] { display: none; }
+
+  /* ---- Contact form ----
+     The CTA is a disclosure button: the form lives collapsed beneath it
+     so the hero keeps its rhythm until someone actually wants to write. */
+  .contact {
+    width: 100%;
+    max-width: 420px;
+    margin: 20px auto 0;
+    text-align: left;
+  }
+
+  /* Closed by default, and closed for good where there is no JS to open
+     it: that case falls back to the plain mail link below. */
+  .contact[hidden] { display: none; }
+
+  .contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .field input,
+  .field textarea {
+    font: inherit;
+    font-size: 1rem;
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 11px 13px;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .field textarea {
+    min-height: 110px;
+    resize: vertical;
+  }
+
+  .field input:focus-visible,
+  .field textarea:focus-visible {
+    outline: none;
+    border-color: var(--yellow);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+  }
+
+  /* The honeypot. Hidden from sight, from screen readers and from tab
+     order, so only something filling fields blindly will trip it. */
+  .botcheck {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .contact .cta {
+    align-self: flex-start;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1rem;
+  }
+
+  /* The fallback mail link, and the line that replaces the form once a
+     message is through. Both sit quietly under the action. */
+  .contact-alt {
+    margin: 14px 0 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .contact-alt a { color: var(--muted); }
+
+  .sent {
+    margin: 0;
+    padding: 16px 18px;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--yellow);
+    border-radius: 10px;
+    background: var(--sent-bg);
+    text-align: left;
+  }
+
+  .sent strong { display: block; margin-bottom: 4px; }
+
+  .sent span {
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .field input, .field textarea { transition: none; }
   }
 
   footer {
@@ -473,7 +591,55 @@
         Stay tuned&hellip;
       </p>
 
-      <a class="cta" href="mailto:hello@dyeyellowstudios.com">Get in touch</a>
+      <!-- Ships as a plain mail link. The script upgrades it into the
+           button that opens the form below, so a visitor without JS still
+           has a working way to reach us. -->
+      <a class="cta" id="contactToggle" href="mailto:hello@dyeyellowstudios.com"
+         aria-expanded="false" aria-controls="contactPanel">Get in touch</a>
+
+      <div class="contact" id="contactPanel" hidden>
+        <form class="contact-form" id="contactForm"
+              action="https://api.web3forms.com/submit" method="POST">
+          <input type="hidden" name="access_key"
+                 value="2c1096e2-3b94-4de0-9e4a-bfb9ff9e455d">
+          <input type="hidden" name="subject"
+                 value="New message from dyeyellowstudios.com">
+          <input type="hidden" name="from_name" value="Dye Yellow Studios">
+          <!-- Sends the visitor's address back as Reply-To, so a reply in
+               the mail client goes to them rather than to Web3Forms. -->
+          <input type="hidden" name="replyto" value="email">
+          <!-- Comes back to our own page rather than their thank-you screen. -->
+          <input type="hidden" name="redirect"
+                 value="https://dyeyellowstudios.com/?sent=1">
+
+          <label class="botcheck">
+            Leave this field empty
+            <input type="checkbox" name="botcheck" tabindex="-1" aria-hidden="true">
+          </label>
+
+          <div class="field">
+            <label for="cf-name">Name</label>
+            <input type="text" id="cf-name" name="name" autocomplete="name" required>
+          </div>
+
+          <div class="field">
+            <label for="cf-email">Email</label>
+            <input type="email" id="cf-email" name="email" autocomplete="email" required>
+          </div>
+
+          <div class="field">
+            <label for="cf-message">Message</label>
+            <textarea id="cf-message" name="message" rows="5" required></textarea>
+          </div>
+
+          <button class="cta" type="submit">Send message</button>
+        </form>
+
+        <p class="contact-alt" id="contactAlt">
+          Or email us straight at
+          <a href="mailto:hello@dyeyellowstudios.com">hello@dyeyellowstudios.com</a>.
+        </p>
+      </div>
     </div>
   </main>
 
@@ -527,6 +693,77 @@
 
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
+
+    /* ---- Contact ----
+       The mail link becomes a disclosure button for the form. Done in
+       script so that without JS the link stays a link and still works. */
+    (function () {
+      var toggle = document.getElementById('contactToggle');
+      var panel = document.getElementById('contactPanel');
+      var form = document.getElementById('contactForm');
+      var alt = document.getElementById('contactAlt');
+      if (!toggle || !panel || !form) return;
+
+      /* Back from Web3Forms: say so in place of the form, then drop the
+         flag so a reload does not claim a second message was sent. */
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('sent') === '1') {
+        var note = document.createElement('p');
+        note.className = 'sent';
+        note.setAttribute('role', 'status');
+        note.innerHTML = '<strong>Thanks \u2014 that is on its way.</strong>' +
+          '<span>We read everything and will get back to you soon.</span>';
+        form.replaceWith(note);
+        if (alt) alt.remove();
+        panel.hidden = false;
+        toggle.hidden = true;
+
+        params.delete('sent');
+        var rest = params.toString();
+        window.history.replaceState({}, '',
+          window.location.pathname + (rest ? '?' + rest : '') + window.location.hash);
+        return;
+      }
+
+      /* Only now is the link a button: role, keyboard behaviour and all. */
+      toggle.setAttribute('role', 'button');
+      toggle.removeAttribute('href');
+      toggle.setAttribute('tabindex', '0');
+
+      function open() {
+        panel.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        document.getElementById('cf-name').focus();
+      }
+
+      function close() {
+        panel.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.focus();
+      }
+
+      toggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (panel.hidden) { open(); } else { close(); }
+      });
+
+      /* A div with role=button has to answer to Space and Enter itself. */
+      toggle.addEventListener('keydown', function (e) {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          if (panel.hidden) { open(); } else { close(); }
+        }
+      });
+
+      /* Escape folds it away again, as long as nothing is half-typed. */
+      panel.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var typed = form.querySelector('input[name="name"]').value ||
+                    form.querySelector('input[name="email"]').value ||
+                    form.querySelector('textarea[name="message"]').value;
+        if (!typed) close();
+      });
+    })();
 
     (function () {
       var root = document.documentElement;
