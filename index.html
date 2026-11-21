@@ -507,6 +507,30 @@
     color: var(--muted);
   }
 
+  /* With room to spare the tenets sit side by side instead of stacking:
+     two by two on tablets, then one row of four once the section can
+     widen past the reading measure without starving each column. */
+  @media (min-width: 720px) {
+    .tenets { grid-template-columns: repeat(2, 1fr); gap: 32px 28px; }
+    /* In columns the numeral sits above its title, and subgrid shares the
+       row tracks so every title and paragraph starts on the same line even
+       when one title wraps and its neighbour doesn't. */
+    .tenets li {
+      grid-template-columns: 1fr;
+      grid-template-rows: subgrid;
+      grid-row: span 3;
+      row-gap: 10px;
+    }
+    .tenets .num { grid-row: auto; }
+    .tenets h3 { align-self: start; }
+    .tenets p { margin-top: 0; }
+  }
+
+  @media (min-width: 1080px) {
+    .philosophy { max-width: 1120px; padding-left: 24px; padding-right: 24px; }
+    .tenets { grid-template-columns: repeat(4, 1fr); }
+  }
+
   @media (max-width: 480px) {
     .philosophy { padding-bottom: 32px; }
     .contact-section { padding: 32px 16px 56px; }
@@ -642,6 +666,16 @@
           Creativity and ingenuity aren't things you can automate. Every idea here
           comes from a person. Machines are how we bring those ideas to life:
           faster, further, more of them. No slop.
+        </p>
+      </li>
+
+      <li>
+        <span class="num" aria-hidden="true">04</span>
+        <h3>Your data on your terms</h3>
+        <p>
+          Bragging rights used to mean three initials on an arcade screen. Share
+          your scores and best runs when you want, with who you want. No network
+          watching you play. Your data is not for sale.
         </p>
       </li>
     </ol>
