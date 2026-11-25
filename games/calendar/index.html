@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Calendar game — Dye Yellow Studios</title>
+<link rel="icon" href="../../dye-yellow-logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="loading.css">
+<style>
+  /* Tokens mirror the landing page so the gate feels like the site
+     rather than a bolted-on password box. */
+  :root {
+    color-scheme: light;
+    --yellow: #F7E733;
+    --bg: #FAF8F3;
+    --fg: #111110;
+    --muted: #605D56;
+    --rule: rgba(17, 17, 16, 0.12);
+    --on-yellow: #111110;
+    --cta-border: #111110;
+    --cta-shadow: rgba(17, 17, 16, 0.9);
+    --field-bg: #FFFDF7;
+    --error: #A3341F;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #100F0C;
+      --fg: #F2F2EC;
+      --muted: #8E9086;
+      --rule: rgba(242, 242, 236, 0.14);
+      --on-yellow: #100F0C;
+      --cta-border: transparent;
+      --cta-shadow: rgba(247, 231, 51, 0.35);
+      --field-bg: #1B1A15;
+      --error: #F0907A;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  html, body { background: var(--bg); }
+
+  body {
+    color: var(--fg);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* ---- The gate ---- */
+  .gate {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    text-align: center;
+  }
+
+  .gate-inner { width: 100%; max-width: 380px; }
+
+  .eyebrow {
+    font-size: clamp(0.8rem, 2.4vw, 0.95rem);
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+
+  .gate h1 {
+    font-size: clamp(1.5rem, 5vw, 2rem);
+    line-height: 1.2;
+    margin: 0 0 12px;
+  }
+
+  .gate-lede { color: var(--muted); margin: 0 0 28px; }
+
+  .field { text-align: left; margin-bottom: 16px; }
+
+  .field label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .field input[type="password"] {
+    width: 100%;
+    padding: 12px 14px;
+    font: inherit;
+    color: var(--fg);
+    background: var(--field-bg);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+  }
+
+  .field input:focus-visible {
+    outline: 2px solid var(--yellow);
+    outline-offset: 2px;
+  }
+
+  .remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+
+  .remember input { accent-color: var(--yellow); }
+
+  .cta {
+    display: inline-block;
+    width: 100%;
+    background: var(--yellow);
+    color: var(--on-yellow);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 14px 28px;
+    border-radius: 999px;
+    border: 2px solid var(--cta-border);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .cta:hover:not(:disabled), .cta:focus-visible:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 var(--cta-shadow);
+  }
+
+  .cta:disabled { opacity: 0.6; cursor: progress; }
+
+  .status {
+    min-height: 1.6em;
+    margin: 16px 0 0;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .status[data-tone="error"] { color: var(--error); }
+
+  .back {
+    display: inline-block;
+    margin-top: 28px;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  /* ---- The game ---- */
+  /* Hidden until the pck decrypts, then it owns the viewport. Godot sizes
+     the canvas itself (canvasResizePolicy 2), so it only needs a stage. */
+  .stage { display: none; }
+
+  body.playing { overflow: hidden; background: #000; touch-action: none; }
+  body.playing .gate { display: none; }
+  body.playing .stage { display: block; }
+
+  #canvas { display: block; margin: 0; padding: 0; border: 0; }
+  #canvas:focus { outline: none; }
+
+  /* Godot's own boot-overlay rules, carried over from the export shell so
+     that loading.css (which only restyles them) has something to style. */
+  #status, #status-splash, #status-progress { position: absolute; left: 0; right: 0; }
+  #status, #status-splash { top: 0; bottom: 0; }
+
+  #status {
+    background-color: #000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    visibility: hidden;
+  }
+
+  #status-splash { max-height: 100%; max-width: 100%; margin: auto; }
+  #status-splash.show-image--false { display: none; }
+  #status-splash.fullsize--true { height: 100%; width: 100%; object-fit: contain; }
+  #status-splash.use-filter--false { image-rendering: pixelated; }
+
+  #status-progress, #status-notice { display: none; }
+  #status-progress { bottom: 10%; width: 50%; margin: 0 auto; }
+
+  #status-notice {
+    background-color: #5b3943;
+    border-radius: 0.5rem;
+    border: 1px solid #9b3943;
+    color: #e0e0e0;
+    line-height: 1.3;
+    margin: 0 2rem;
+    overflow: hidden;
+    padding: 1rem;
+    text-align: center;
+    z-index: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cta { transition: none; }
+    .cta:hover, .cta:focus-visible { transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="gate-inner">
+    <p class="eyebrow">Dye Yellow Studios</p>
+    <h1>Calendar game</h1>
+    <p class="gate-lede">A playable prototype. Enter the password you were sent.</p>
+
+    <form id="gateForm" autocomplete="off">
+      <div class="field">
+        <label for="pw">Password</label>
+        <input type="password" id="pw" name="password" autocomplete="current-password"
+               required autofocus>
+      </div>
+
+      <label class="remember">
+        <input type="checkbox" id="remember" checked>
+        Remember me on this device for 30 days
+      </label>
+
+      <button class="cta" type="submit" id="unlock">Play</button>
+    </form>
+
+    <p class="status" id="gate-status" role="status" aria-live="polite"></p>
+
+    <a class="back" href="/">&larr; Dye Yellow Studios</a>
+  </div>
+</div>
+
+<div class="stage" id="stage">
+  <canvas id="canvas">Your browser does not support the canvas tag.</canvas>
+  <noscript>This prototype needs JavaScript.</noscript>
+
+  <!-- Godot's boot overlay, kept because loading.css restyles it into the
+       Dye Yellow splash. The engine is a 36MB download, so this is what
+       people look at between unlocking and playing. -->
+  <div id="status">
+    <img id="status-splash" class="show-image--true fullsize--true use-filter--true"
+         src="index.png" alt="">
+    <progress id="status-progress"></progress>
+    <div id="status-notice"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var PCK_URL = 'index.pck.enc';
+  var MAGIC = 'DYEPCK1\0';
+  var STORE_KEY = 'dye.calendar.key';
+  var REMEMBER_DAYS = 30;
+
+  // Mirrors the Godot export shell. onProgress is wired up further down,
+  // once the overlay elements are in hand.
+  var GODOT_CONFIG = {
+    'args': [],
+    'canvasResizePolicy': 2,
+    'emscriptenPoolSize': 8,
+    'ensureCrossOriginIsolationHeaders': true,
+    'executable': 'index',
+    'experimentalVK': false,
+    'fileSizes': { 'index.pck': 1468300, 'index.wasm': 37900721 },
+    'focusCanvas': true,
+    'gdextensionLibs': [],
+    'godotPoolSize': 4
+  };
+  var GODOT_THREADS_ENABLED = false;
+
+  var form = document.getElementById('gateForm');
+  var input = document.getElementById('pw');
+  var rememberBox = document.getElementById('remember');
+  var button = document.getElementById('unlock');
+  // Not "status": Godot's boot overlay owns that id further down the page.
+  var statusEl = document.getElementById("gate-status");
+
+  function setStatus(text, tone) {
+    statusEl.textContent = text;
+    if (tone) statusEl.setAttribute('data-tone', tone);
+    else statusEl.removeAttribute('data-tone');
+  }
+
+  function busy(isBusy, label) {
+    button.disabled = isBusy;
+    button.textContent = isBusy ? (label || 'Unlocking…') : 'Play';
+  }
+
+  /* ---- Crypto ----
+     The file carries its own salt, iv and iteration count, so the page
+     never has to be rebuilt in step with the build script. */
+
+  function parseContainer(buffer) {
+    var bytes = new Uint8Array(buffer);
+    var magic = String.fromCharCode.apply(null, bytes.subarray(0, 8));
+    if (magic !== MAGIC) throw new Error('That file is not a game package.');
+    return {
+      salt: bytes.subarray(8, 24),
+      iv: bytes.subarray(24, 36),
+      iterations: new DataView(buffer).getUint32(36, true),
+      ciphertext: bytes.subarray(40)
+    };
+  }
+
+  function deriveKey(password, salt, iterations) {
+    return crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']
+    ).then(function (material) {
+      return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: salt, iterations: iterations, hash: 'SHA-256' },
+        material,
+        { name: 'AES-GCM', length: 256 },
+        true, // exportable, so "remember me" can store the derived key
+        ['decrypt']
+      );
+    });
+  }
+
+  function importStoredKey(rawBase64) {
+    var raw = Uint8Array.from(atob(rawBase64), function (c) { return c.charCodeAt(0); });
+    return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, true, ['decrypt']);
+  }
+
+  /* "Remember me" stores the derived key, never the password. That key
+     still decrypts the game on its own, so it is a convenience, not a
+     second factor: anyone with access to this browser profile inherits it. */
+  function rememberKey(key) {
+    return crypto.subtle.exportKey('raw', key).then(function (raw) {
+      var binary = '';
+      var bytes = new Uint8Array(raw);
+      for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      try {
+        localStorage.setItem(STORE_KEY, JSON.stringify({
+          k: btoa(binary),
+          exp: Date.now() + REMEMBER_DAYS * 86400000
+        }));
+      } catch (err) {
+        /* Private windows and blocked site data: not worth failing over. */
+      }
+    });
+  }
+
+  function recallKey() {
+    var stored;
+    try {
+      stored = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    } catch (err) {
+      return Promise.resolve(null);
+    }
+    if (!stored || !stored.k) return Promise.resolve(null);
+    if (!stored.exp || stored.exp < Date.now()) {
+      forgetKey();
+      return Promise.resolve(null);
+    }
+    return importStoredKey(stored.k).catch(function () { return null; });
+  }
+
+  function forgetKey() {
+    try { localStorage.removeItem(STORE_KEY); } catch (err) { /* nothing to do */ }
+  }
+
+  var packagePromise = null;
+  function fetchPackage() {
+    if (!packagePromise) {
+      packagePromise = fetch(PCK_URL, { cache: 'force-cache' }).then(function (response) {
+        if (!response.ok) throw new Error('Could not download the game (' + response.status + ').');
+        return response.arrayBuffer();
+      });
+    }
+    return packagePromise;
+  }
+
+  function decryptPck(key) {
+    return fetchPackage().then(function (buffer) {
+      var parts = parseContainer(buffer);
+      return crypto.subtle.decrypt({ name: 'AES-GCM', iv: parts.iv }, key, parts.ciphertext);
+    });
+  }
+
+  /* ---- Boot ---- */
+
+  function loadEngineScript() {
+    return new Promise(function (resolve, reject) {
+      var script = document.createElement('script');
+      script.src = 'index.js';
+      script.onload = resolve;
+      script.onerror = function () { reject(new Error('Could not load the game engine.')); };
+      document.head.appendChild(script);
+    });
+  }
+
+  /* The boot overlay: Godot's own elements, driven by hand because this
+     page calls init/start itself rather than going through startGame. */
+  var overlay = document.getElementById('status');
+  var overlayProgress = document.getElementById('status-progress');
+  var overlayNotice = document.getElementById('status-notice');
+
+  function showOverlay(mode) {
+    if (mode === 'hidden') {
+      overlay.remove();
+      return;
+    }
+    overlay.style.visibility = 'visible';
+    overlayProgress.style.display = mode === 'progress' ? 'block' : 'none';
+    overlayNotice.style.display = mode === 'notice' ? 'block' : 'none';
+  }
+
+  function overlayFailure(text) {
+    overlayNotice.textContent = text;
+    showOverlay('notice');
+  }
+
+  GODOT_CONFIG['onProgress'] = function (current, total) {
+    if (current > 0 && total > 0) {
+      overlayProgress.value = current;
+      overlayProgress.max = total;
+    } else {
+      overlayProgress.removeAttribute('value');
+      overlayProgress.removeAttribute('max');
+    }
+  };
+
+  function boot(pck) {
+    setStatus('Starting…');
+    return loadEngineScript().then(function () {
+      var missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
+      if (missing.length !== 0) {
+        throw new Error('This browser is missing: ' + missing.join(', '));
+      }
+
+      var engine = new Engine(GODOT_CONFIG);
+      document.body.classList.add('playing');
+      showOverlay('progress');
+
+      // Deliberately not engine.startGame(): that helper always calls
+      // preloadFile('index.pck') with a *string*, which fetches the pack
+      // from the server — and the server only has the encrypted one. So
+      // do what startGame does, but hand it the decrypted bytes instead:
+      // init the engine (loads index.wasm), register the pack under the
+      // name the engine expects, then start with --main-pack pointing at
+      // it. init() caches its promise, so start()'s own init() is a no-op.
+      return engine.init('index').then(function () {
+        return engine.preloadFile(pck, 'index.pck');
+      }).then(function () {
+        return engine.start({ 'args': ['--main-pack', 'index.pck'] });
+      }).then(function () {
+        showOverlay('hidden');
+      }).catch(function (err) {
+        // The engine got far enough to take over the page, so report the
+        // failure where the player is looking rather than behind the gate.
+        overlayFailure(err && err.message ? err.message : 'The game failed to start.');
+        throw err;
+      });
+    });
+  }
+
+  function unlockWith(key, options) {
+    busy(true, options && options.resuming ? 'Resuming…' : 'Unlocking…');
+    setStatus(options && options.resuming ? 'Welcome back — decrypting…' : 'Decrypting…');
+
+    return decryptPck(key).then(function (pck) {
+      if (options && options.remember) return rememberKey(key).then(function () { return pck; });
+      return pck;
+    }).then(boot).then(function () {
+      setStatus('');
+      busy(false);
+    }).catch(function (err) {
+      busy(false);
+      // A GCM tag mismatch throws a bare OperationError with no message,
+      // which is exactly what a wrong password looks like.
+      var wrongPassword = err && (err.name === 'OperationError' || !err.message);
+      if (wrongPassword) {
+        forgetKey();
+        setStatus(options && options.resuming
+          ? 'That saved key no longer works — enter the password again.'
+          : 'Wrong password.', 'error');
+        input.value = '';
+        input.focus();
+      } else {
+        setStatus(err.message || 'Something went wrong.', 'error');
+      }
+    });
+  }
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var password = input.value;
+    if (!password) return;
+
+    busy(true, 'Checking…');
+    setStatus('Checking…');
+
+    fetchPackage().then(function (buffer) {
+      var parts = parseContainer(buffer);
+      return deriveKey(password, parts.salt, parts.iterations);
+    }).then(function (key) {
+      return unlockWith(key, { remember: rememberBox.checked });
+    }).catch(function (err) {
+      busy(false);
+      setStatus(err.message || 'Something went wrong.', 'error');
+    });
+  });
+
+  // WebCrypto only exists in secure contexts. Over plain http on a LAN
+  // address this page would fail at the first decrypt with no explanation.
+  if (!window.isSecureContext || !window.crypto || !crypto.subtle) {
+    setStatus('This page needs a secure connection (https or localhost).', 'error');
+    button.disabled = true;
+    return;
+  }
+
+  // Someone arriving with ?logout (or #logout) wants the saved key gone.
+  if (/(\?|&|#)logout\b/.test(location.search + location.hash)) {
+    forgetKey();
+    setStatus('Signed out on this device.');
+  } else {
+    recallKey().then(function (key) {
+      if (key) unlockWith(key, { resuming: true });
+    });
+  }
+}());
+</script>
+</body>
+</html>
