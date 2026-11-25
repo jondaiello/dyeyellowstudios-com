@@ -5,3 +5,5 @@
 games-src/
 .env
 node_modules/
+
+certs/

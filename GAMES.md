@@ -48,13 +48,29 @@ in any of them.
 
 ## Testing locally
 
-WebCrypto only works in a secure context, so `file://` will not do:
+WebCrypto only works in a secure context, so `file://` will not do. Anything
+serving over localhost is enough:
 
 ```bash
-cd /Users/jondaiello/Documents/dye-yellow-website && python3 -m http.server 8788
+python3 -m http.server 8788
 ```
 
 Then open http://localhost:8788/games/calendar/ .
+
+### On a phone
+
+A LAN address is not a secure context, so plain http will not work there —
+the gate has no WebCrypto to call and says so. Use:
+
+```bash
+node tools/serve-local.mjs
+```
+
+It serves the repo over HTTPS on every interface and prints the address to
+open on the phone, generating a self-signed certificate with the current LAN
+address in the SAN (`certs/`, gitignored, regenerated when the network
+changes). Safari warns because nothing signed it: Show Details -> visit this
+website. Past the warning the origin is https and the gate works.
 
 ## Changing the password
 
