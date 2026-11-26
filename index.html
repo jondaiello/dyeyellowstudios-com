@@ -197,8 +197,7 @@
   /* The pitch for the play-test list: one short paragraph between the
      section heading and the button, on a narrow measure so it reads as
      a lead-in rather than body copy. */
-  .contact-section h2,
-  .games-section h2 { margin-bottom: 16px; }
+  .contact-section h2 { margin-bottom: 16px; }
 
   .signup-lede {
     max-width: 420px;
@@ -472,28 +471,7 @@
     border-top: 1px solid var(--rule);
   }
 
-  /* ---- Games ----
-     Sits between Philosophy and the play-test sign-up, on the same
-     measure, so the page reads: what we believe, what you can play,
-     how to hear about the next one. */
-  .games-section {
-    flex: none;
-    width: 100%;
-    max-width: var(--max);
-    margin: 0 auto;
-    padding: 40px 16px 8px;
-    text-align: center;
-    border-top: 1px solid var(--rule);
-  }
-
-  .games-lede {
-    max-width: 420px;
-    margin: 0 auto 24px;
-    color: var(--muted);
-  }
-
   .philosophy h2,
-  .games-section h2,
   .contact-section h2 {
     font-size: clamp(0.8rem, 2.4vw, 0.95rem);
     line-height: 1.4;
@@ -576,7 +554,6 @@
 
   @media (max-width: 480px) {
     .philosophy { padding-bottom: 32px; }
-    .games-section { padding: 32px 16px 8px; }
     .contact-section { padding: 32px 16px 56px; }
     .tenets { gap: 24px; }
     .tenets li { grid-template-columns: 1.7em 1fr; }
@@ -602,7 +579,7 @@
 
   /* Everything on the page sits above the framebuffer. The toggle is
      already fixed with its own z-index, so it is left alone here. */
-  main, .philosophy, .games-section, .contact-section, footer { position: relative; z-index: 1; }
+  main, .philosophy, .contact-section, footer { position: relative; z-index: 1; }
 
   /* The ground rises rather than appearing, so the word feels like a cause. */
   .ground {
@@ -723,15 +700,6 @@
         </p>
       </li>
     </ol>
-  </section>
-
-  <section class="games-section" aria-labelledby="games-title">
-    <h2 id="games-title">Games</h2>
-    <p class="games-lede">
-      Prototypes we're testing. They're password-protected while they're rough —
-      ask below and we'll send you the password.
-    </p>
-    <a class="cta" href="/games/">See what's playable</a>
   </section>
 
   <section class="contact-section" id="contact" aria-labelledby="playtest-title">
